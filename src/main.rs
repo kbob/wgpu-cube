@@ -1,3 +1,4 @@
+use cgmath::prelude::*;
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -8,6 +9,11 @@ use winit::{
 
 mod cube_model;
 mod texture;
+mod trackball;
+use trackball::{
+    Manipulable,
+    Responder,
+};
 
 // Question:
 //    Should each instance be a face and the cube be uniform?
@@ -71,7 +77,6 @@ struct CameraUniform {
 
 impl CameraUniform {
     fn new() -> Self {
-        use cgmath::SquareMatrix;
         Self {
             view_proj: cgmath::Matrix4::identity().into(),
         }
@@ -79,6 +84,84 @@ impl CameraUniform {
 
     fn update_view_proj(&mut self, camera: &Camera) {
         self.view_proj = camera.build_view_projection_matrix().into();
+    }
+}
+
+struct FaceInstance {
+    cube_to_world: cgmath::Matrix4<f32>,
+    face_to_cube: cgmath::Matrix4<f32>,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct FaceInstanceRaw {
+    cube_to_world: [[f32; 4]; 4],
+    face_to_cube: [[f32; 4]; 4],
+}
+
+impl FaceInstance {
+    fn to_raw(&self) -> FaceInstanceRaw {
+        FaceInstanceRaw {
+            cube_to_world: self.cube_to_world.into(),
+            face_to_cube: self.face_to_cube.into(),
+        }
+    }
+    fn update_cube_xform(&mut self, new_xform: &cgmath::Matrix4<f32>) {
+        self.cube_to_world = *new_xform;
+    }
+}
+
+impl FaceInstanceRaw {
+    fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
+        use std::mem;
+        wgpu::VertexBufferLayout {
+            array_stride: mem::size_of::<FaceInstanceRaw>(
+                ) as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                    shader_location: 6,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
+                    shader_location: 7,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
+                    shader_location: 8,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
+                    shader_location: 9,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 20]>() as wgpu::BufferAddress,
+                    shader_location: 10,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 24]>() as wgpu::BufferAddress,
+                    shader_location: 11,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 28]>() as wgpu::BufferAddress,
+                    shader_location: 12,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+            ],
+        }
     }
 }
 
@@ -106,7 +189,8 @@ fn create_render_pipeline(
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
+                // cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,
@@ -153,6 +237,10 @@ struct State {
     _camera_uniform: CameraUniform,
     _camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    cube_trackball: trackball::Trackball,
+    cube_face_instances: Vec<FaceInstance>,
+    cube_face_instance_data: Vec<FaceInstanceRaw>,
+    cube_face_instance_buffer: wgpu::Buffer,
     diffuse_bind_group: wgpu::BindGroup,
     face_index_count: u32,
     face_vertex_buffer: wgpu::Buffer,
@@ -162,6 +250,9 @@ struct State {
 
 impl State {
     async fn new(window: &Window) -> Self {
+
+        // Device and Surface
+
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) };
@@ -225,8 +316,10 @@ impl State {
         };
         surface.configure(&device, &config);
 
+        // Camera
+
         let _camera = Camera {
-            eye: (0.0, 1.0, 2.0).into(),
+            eye: (1.0, 1.0, 2.0).into(),
             target: (0.0, 0.0, 0.0).into(),
             up: cgmath::Vector3::unit_y(),
             aspect: config.width as f32 / config.height as f32,
@@ -280,7 +373,58 @@ impl State {
             }
         );
 
+        // Cube Model
+
         let model = cube_model::CubeModel::new();
+
+        let cube_trackball = trackball::Trackball::new(&size);
+
+        let cube_face_instances = model.face_xforms.iter().map( {
+            |xform|
+            FaceInstance {
+                cube_to_world: cgmath::Matrix4::identity(),
+                face_to_cube: *xform,
+            }
+        }).collect::<Vec<FaceInstance>>();
+
+        let shader_text = include_str!("cube_face_shader.wgsl");
+        let cube_face_shader = wgpu::ShaderModuleDescriptor {
+            label: Some("cube_face_shader"),
+            source: wgpu::ShaderSource::Wgsl(shader_text.into()),
+        };
+
+        let face_index_count = model.face_indices.len() as u32;
+
+        let face_vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("face_vertex_buffer"),
+                contents: bytemuck::cast_slice(model.face_vertices.as_slice()),
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+
+        let face_index_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("face_index_buffer"),
+                contents: bytemuck::cast_slice(model.face_indices.as_slice()),
+                usage: wgpu::BufferUsages::INDEX,
+            }
+        );
+
+        let cube_face_instance_data = cube_face_instances.iter().map(
+            FaceInstance::to_raw
+        ).collect::<Vec<_>>();
+
+        let cube_face_instance_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("cube_face_instance_buffer"),
+                contents: bytemuck::cast_slice(&cube_face_instance_data),
+                usage: wgpu::BufferUsages::VERTEX |
+                       wgpu::BufferUsages::COPY_DST,
+            }
+        );
+
+        // Cube Face Texture
 
         let diffuse_bytes = include_bytes!("hi.png");
         let diffuse_texture = texture::Texture::from_bytes(
@@ -339,29 +483,7 @@ impl State {
             }
         );
 
-        let shader_text = include_str!("cube_face_shader.wgsl");
-        let cube_face_shader = wgpu::ShaderModuleDescriptor {
-            label: Some("cube_face_shader"),
-            source: wgpu::ShaderSource::Wgsl(shader_text.into()),
-        };
-
-        let face_index_count = model.face_indices.len() as u32;
-
-        let face_vertex_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("face_vertex_buffer"),
-                contents: bytemuck::cast_slice(model.face_vertices.as_slice()),
-                usage: wgpu::BufferUsages::VERTEX,
-            }
-        );
-
-        let face_index_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("face_index_buffe"),
-                contents: bytemuck::cast_slice(model.face_indices.as_slice()),
-                usage: wgpu::BufferUsages::INDEX,
-            }
-        );
+        // Pipeline
 
         let pipeline_layout = device.create_pipeline_layout(
             &wgpu::PipelineLayoutDescriptor {
@@ -381,9 +503,12 @@ impl State {
             None,                       // depth_format
             &[                          // vertex_layouts
                 cube_model::FaceVertex::desc(),
+                FaceInstanceRaw::desc(),
             ],
             cube_face_shader,           // shader
         );
+
+        // Results
 
         Self {
             size,
@@ -395,6 +520,10 @@ impl State {
             _camera_uniform,
             _camera_buffer,
             camera_bind_group,
+            cube_trackball,
+            cube_face_instances,
+            cube_face_instance_data,
+            cube_face_instance_buffer,
             diffuse_bind_group,
             face_index_count,
             face_vertex_buffer,
@@ -405,18 +534,34 @@ impl State {
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
+            println!("resize");
             self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
+            self.cube_trackball.set_viewport_size(&new_size);
         }
     }
 
-    pub fn input(&mut self, _event: &WindowEvent) -> bool {
-        false
+    pub fn handle_window_event(&mut self, event: &WindowEvent) -> bool {
+        self.cube_trackball.handle_window_event(event)
     }
     
     pub fn update(&mut self) {
+        let now = std::time::Instant::now();
+        let cube_to_world = self.cube_trackball.orientation(now);
+        for fi in &mut self.cube_face_instances {
+            fi.update_cube_xform(&cube_to_world);
+        }
+        for fir in &mut self.cube_face_instance_data {
+            fir.cube_to_world = cube_to_world.into();
+        }
+        self.queue.write_buffer(
+            &self.cube_face_instance_buffer,
+            0,
+            bytemuck::cast_slice(self.cube_face_instance_data.as_slice()),
+        );
+        
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -456,11 +601,20 @@ impl State {
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(1, &self.diffuse_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.face_vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(
+                1,
+                self.cube_face_instance_buffer.slice(..),
+            );
             render_pass.set_index_buffer(
                 self.face_index_buffer.slice(..),
                 wgpu::IndexFormat::Uint32
             );
-            render_pass.draw_indexed(0..self.face_index_count, 0, 0..1);
+            let face_instance_count = self.cube_face_instances.len();
+            render_pass.draw_indexed(
+                0..self.face_index_count,
+                0,
+                0..face_instance_count as _
+                );
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -469,6 +623,7 @@ impl State {
         Ok(())
     }
 }
+
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
@@ -476,32 +631,43 @@ fn main() {
     let mut state = pollster::block_on(State::new(&window));
 
     event_loop.run(move |event, _, control_flow| {
+        // println!("event = {:?}", event);
         match event {
+
             Event::WindowEvent {
                 ref event,
                 window_id,
-            } if window_id == window.id() => if !state.input(event) {
-                match event {
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    } => *control_flow = ControlFlow::Exit,
-                    WindowEvent::Resized(physical_size) => {
-                        state.resize(*physical_size);
-                    }
-                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                        state.resize(**new_inner_size);
-                    }
+            } if window_id == window.id() => {
+                if !state.handle_window_event(event) {
+                    match event {
 
-                    _ => {}
+                        WindowEvent::CloseRequested
+                        | WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                                    ..
+                                },
+                            ..
+                        } => *control_flow = ControlFlow::Exit,
+
+                        WindowEvent::Resized(physical_size) => {
+                            state.resize(*physical_size);
+                        }
+
+                        WindowEvent::ScaleFactorChanged {
+                            new_inner_size,
+                            ..
+                        } => {
+                            state.resize(**new_inner_size);
+                        }
+
+                        _ => {}
+                    }
                 }
-            }
+            },
+
             Event::RedrawRequested(window_id) if window_id == window.id() => {
                 state.update();
                 match state.render() {
@@ -512,9 +678,11 @@ fn main() {
                     Err(e) => eprintln!("{:?}", e),
                 }
             }
+
             Event::MainEventsCleared => {
                 window.request_redraw();
             }
+            
             _ => {}
         }
     });

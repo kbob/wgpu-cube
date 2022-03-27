@@ -6,6 +6,18 @@ struct CameraUniform {
 [[group(0), binding(0)]]
 var<uniform> camera: CameraUniform;
 
+struct InstanceInput {
+    [[location(5)]] cube_to_world_0: vec4<f32>;
+    [[location(6)]] cube_to_world_1: vec4<f32>;
+    [[location(7)]] cube_to_world_2: vec4<f32>;
+    [[location(8)]] cube_to_world_3: vec4<f32>;
+
+    [[location(9)]] face_to_cube_0: vec4<f32>;
+    [[location(10)]] face_to_cube_1: vec4<f32>;
+    [[location(11)]] face_to_cube_2: vec4<f32>;
+    [[location(12)]] face_to_cube_3: vec4<f32>;
+};
+
 struct VertexInput {
     [[location(0)]] position: vec3<f32>;
     [[location(1)]] normal: vec3<f32>;
@@ -21,9 +33,26 @@ struct VertexOutput {
 [[stage(vertex)]]
 fn vs_main(
     model: VertexInput,
+    instance: InstanceInput,
 ) -> VertexOutput {
+    let cube_to_world = mat4x4<f32>(
+        instance.cube_to_world_0,
+        instance.cube_to_world_1,
+        instance.cube_to_world_2,
+        instance.cube_to_world_3,
+    );
+    let face_to_cube = mat4x4<f32>(
+        instance.cube_to_world_0,
+        instance.face_to_cube_1,
+        instance.face_to_cube_2,
+        instance.face_to_cube_3,
+    );
+
     var pos: vec4<f32> = vec4<f32>(model.position, 1.0);
+    pos = face_to_cube * pos;
+    pos = cube_to_world * pos;
     pos = camera.view_proj * pos;
+
     var out: VertexOutput;
     out.clip_position = pos;
     out.normal = model.normal;

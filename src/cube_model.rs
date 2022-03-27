@@ -21,6 +21,8 @@ pub const FACES: [Quaternion<f32>; 6] = [
 pub struct CubeModel {
     pub face_vertices: Vec<FaceVertex>,
     pub face_indices: Vec<u32>,
+    pub face_xforms: Vec<cgmath::Matrix4<f32>>,
+
     pub edge_vertices: Vec<EdgeVertex>,
     pub edge_indices: Vec<u32>,
 }
@@ -87,6 +89,7 @@ impl CubeModel {
         let mut out = Self {
             face_vertices: Vec::new(),
             face_indices: Vec::new(),
+            face_xforms: Vec::new(),
             edge_vertices: Vec::new(),
             edge_indices: Vec::new(),
         };
@@ -146,6 +149,15 @@ impl CubeModel {
         out.face_indices.push(1);
         out.face_indices.push(2);
         out.face_indices.push(3);
+
+        let z = cgmath::Vector3::<f32>::unit_z();
+        let rot1 = cgmath::Matrix4::from_angle_z(cgmath::Deg::<f32>(180.0));
+        // let rot2 = cgmath::Matrix4::from_angle_z(cgmath::Deg::<f32>(90.0));
+        let tran = cgmath::Matrix4::<f32>::from_translation(0.5 * z);
+        // let xform = rot2 * tran * rot1;
+        out.face_xforms.push(cgmath::Matrix4::<f32>::identity());
+        out.face_xforms.push(tran * rot1);
+        // out.face_xforms.push(tran * rot1);
 
         out
     }
