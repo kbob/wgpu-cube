@@ -42,7 +42,7 @@ fn vs_main(
         instance.cube_to_world_3,
     );
     let face_to_cube = mat4x4<f32>(
-        instance.cube_to_world_0,
+        instance.face_to_cube_0,
         instance.face_to_cube_1,
         instance.face_to_cube_2,
         instance.face_to_cube_3,

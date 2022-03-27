@@ -199,7 +199,8 @@ fn create_render_pipeline(
                 wgpu::DepthStencilState {
                     format,
                     depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::Less,
+                    // depth_compare: wgpu::CompareFunction::Less,
+                    depth_compare: wgpu::CompareFunction::Greater,
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
                 }),
@@ -229,10 +230,11 @@ fn create_render_pipeline(
 
 struct State {
     size: winit::dpi::PhysicalSize<u32>,
-    surface: wgpu::Surface,
+    surface: wgpu::Surface, 
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+    depth_texture: texture::Texture,
     _camera: Camera,
     _camera_uniform: CameraUniform,
     _camera_buffer: wgpu::Buffer,
@@ -320,6 +322,7 @@ impl State {
 
         let _camera = Camera {
             eye: (1.0, 1.0, 2.0).into(),
+            // eye: (0.0, 0.0, 2.0).into(),
             target: (0.0, 0.0, 0.0).into(),
             up: cgmath::Vector3::unit_y(),
             aspect: config.width as f32 / config.height as f32,
@@ -485,6 +488,11 @@ impl State {
 
         // Pipeline
 
+        let depth_texture = texture::Texture::create_depth_texture(
+            &device,
+            &config,
+            "depth_texture",
+        );
         let pipeline_layout = device.create_pipeline_layout(
             &wgpu::PipelineLayoutDescriptor {
                 label: Some("pipeline_layout (cube faces)"),
@@ -500,7 +508,7 @@ impl State {
             &device,                    // device
             &pipeline_layout,           // layout
             config.format,              // color_format
-            None,                       // depth_format
+            Some(texture::Texture::DEPTH_FORMAT), // depth_format
             &[                          // vertex_layouts
                 cube_model::FaceVertex::desc(),
                 FaceInstanceRaw::desc(),
@@ -516,6 +524,7 @@ impl State {
             device,
             queue,
             config,
+            depth_texture,
             _camera,
             _camera_uniform,
             _camera_buffer,
@@ -594,7 +603,19 @@ impl State {
                             },
                         },
                     ],
-                    depth_stencil_attachment: None,
+                    depth_stencil_attachment: Some(
+                        wgpu::RenderPassDepthStencilAttachment {
+                            view: & self.depth_texture.view,
+                            depth_ops: Some(
+                                wgpu::Operations {
+                                    // load: wgpu::LoadOp::Clear(1.0),
+                                    load: wgpu::LoadOp::Clear(0.0),
+                                    store: true,
+                                }
+                            ),
+                            stencil_ops: None,
+                        }
+                    ),
                 },
             );
             render_pass.set_pipeline(&self.render_pipeline);

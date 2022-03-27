@@ -85,7 +85,7 @@ impl Trackball {
 
                 0.5 / r2.sqrt()         // outside: on hyperbola
             } as f32
-        )
+        ).normalize()
     }
 
     fn compose_xform(&self) -> Matrix4<f32> {
@@ -131,8 +131,8 @@ impl Manipulable for Trackball {
         if self.last_pos != new_pos {
             self.last_pos = new_pos;
             self.last_instant = t;
-            self.first_xform = self.compose_xform();
         }
+        self.first_xform = self.compose_xform();
     }
 
     fn orientation(&self, _t: Instant) -> Matrix4<f32> {

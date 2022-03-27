@@ -1,27 +1,14 @@
 use cgmath::{
-    Basis3,
-    Point3,
-    Quaternion,
+    Deg,
+    Matrix4,
     Vector3,
 };
-use cgmath::prelude::*;
-
-pub const SIDE: f32 = 128.0;
-pub const EDGE_WIDTH: f32 = 3.0;
-pub const FACES: [Quaternion<f32>; 6] = [
-    Quaternion::from_sv(0.0, Vector3::new(-1.0, 0.0, 0.0)),
-    Quaternion::from_sv(0.0, Vector3::new(0.0, 1.0, 0.0)),
-    Quaternion::from_sv(0.0, Vector3::new(1.0, 0.0, 0.0)),
-    Quaternion::from_sv(0.0, Vector3::new(0.0, 0.0, -1.0)),
-    Quaternion::from_sv(0.0, Vector3::new(0.0, -1.0, 0.0)),
-    Quaternion::from_sv(0.0, Vector3::new(0.0, 0.0, 1.0)),
-];
 
 #[derive(Debug)]
 pub struct CubeModel {
     pub face_vertices: Vec<FaceVertex>,
     pub face_indices: Vec<u32>,
-    pub face_xforms: Vec<cgmath::Matrix4<f32>>,
+    pub face_xforms: Vec<Matrix4<f32>>,
 
     pub edge_vertices: Vec<EdgeVertex>,
     pub edge_indices: Vec<u32>,
@@ -36,29 +23,6 @@ pub struct FaceVertex {
 }
 
 impl FaceVertex {
-    // pub fn desc0<'a>() -> wgpu::VertexBufferLayout<'a> {
-    //     wgpu::VertexBufferLayout {
-    //         array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
-    //         step_mode: wgpu::VertexStepMode::Vertex,
-    //         attributes: &[
-    //             wgpu::VertexAttribute {
-    //                 offset: 0,
-    //                 shader_location: 0,
-    //                 format: wgpu::VertexFormat::Float32x3,
-    //             },
-    //             wgpu::VertexAttribute {
-    //                 offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-    //                 shader_location: 1,
-    //                 format: wgpu::VertexFormat::Float32x3,
-    //             },
-    //             wgpu::VertexAttribute {
-    //                 offset: std::mem::size_of::<[f32; 6]>() as wgpu::BufferAddress,
-    //                 shader_location: 1,
-    //                 format: wgpu::VertexFormat::Float32x2,
-    //             },
-    //         ],
-    //     }
-    // }
 
     const ATTRIBUTES: [wgpu::VertexAttribute; 3] =
         wgpu::vertex_attr_array![
@@ -94,25 +58,6 @@ impl CubeModel {
             edge_indices: Vec::new(),
         };
 
-        for face in FACES {
-            // println!("face = {:?}", face);
-            let rot = Basis3::from_quaternion(&face);
-            let half = SIDE / 2.0;
-            let haew = half + EDGE_WIDTH / 2.0;
-            let _normal = rot.rotate_vector(Vector3::unit_z());
-            for u in [-half, half] {
-                for v in [-half, half] {
-                    let corner = Point3::<f32>::new(u, v, haew);
-                    let _corner = rot.rotate_point(corner);
-                    // out.edge_vertices.push(
-                    //     CubeVertex {
-                    //         position: corner.into(),
-                    //         normal: normal.into(),
-                    //     }
-                    // );
-                }
-            }
-        }
         out.face_vertices.push(
             FaceVertex {                // upper left
                 position: [-0.5, 0.5, 0.0],
@@ -150,14 +95,38 @@ impl CubeModel {
         out.face_indices.push(2);
         out.face_indices.push(3);
 
-        let z = cgmath::Vector3::<f32>::unit_z();
-        let rot1 = cgmath::Matrix4::from_angle_z(cgmath::Deg::<f32>(180.0));
-        // let rot2 = cgmath::Matrix4::from_angle_z(cgmath::Deg::<f32>(90.0));
-        let tran = cgmath::Matrix4::<f32>::from_translation(0.5 * z);
-        // let xform = rot2 * tran * rot1;
-        out.face_xforms.push(cgmath::Matrix4::<f32>::identity());
-        out.face_xforms.push(tran * rot1);
-        // out.face_xforms.push(tran * rot1);
+        let z = Vector3::<f32>::unit_z();
+        let tran = Matrix4::<f32>::from_translation(0.5 * z);
+
+        {
+            let rot1 = Matrix4::from_angle_z(Deg::<f32>(180.0));
+            let rot2 = Matrix4::from_angle_y(Deg::<f32>(-90.0));
+            out.face_xforms.push(rot2 * rot1 * tran);   // 1: left
+        }
+        {
+            let rot1 = Matrix4::from_angle_z(Deg::<f32>(180.0));
+            out.face_xforms.push(rot1 * tran);          // 2: front
+        }
+        {
+            let rot1 = Matrix4::from_angle_z(Deg::<f32>(180.0));
+            let rot2 = Matrix4::from_angle_y(Deg::<f32>(90.0));
+            out.face_xforms.push(rot2 * rot1 * tran);   // 3: right
+        }
+        {
+            let rot1 = Matrix4::from_angle_z(Deg::<f32>(90.0));
+            let rot2 = Matrix4::from_angle_x(Deg::<f32>(90.0));
+            out.face_xforms.push(rot2 * rot1 * tran);   // 4: bottom
+        }
+        {
+            let rot1 = Matrix4::from_angle_z(Deg::<f32>(90.0));
+            let rot2 = Matrix4::from_angle_x(Deg::<f32>(180.0));
+            out.face_xforms.push(rot2 * rot1 * tran);   // 5: back
+        }
+        {
+            let rot1 = Matrix4::from_angle_z(Deg::<f32>(90.0));
+            let rot2 = Matrix4::from_angle_x(Deg::<f32>(-90.0));
+            out.face_xforms.push(rot2 * rot1 * tran);   // 6: top
+        }
 
         out
     }
