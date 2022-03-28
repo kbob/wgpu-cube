@@ -67,6 +67,10 @@ impl Camera {
         );
         return OPENGL_TO_WGPU_MATRIX * proj * view;
     }
+
+    fn configure(&mut self, config: &wgpu::SurfaceConfiguration) {
+        self.aspect = config.width as f32 / config.height as f32;
+    }
 }
 
 #[repr(C)]
@@ -235,8 +239,8 @@ struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     depth_texture: texture::Texture,
-    _camera: Camera,
-    _camera_uniform: CameraUniform,
+    camera: Camera,
+    camera_uniform: CameraUniform,
     _camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     cube_trackball: trackball::Trackball,
@@ -320,7 +324,7 @@ impl State {
 
         // Camera
 
-        let _camera = Camera {
+        let camera = Camera {
             eye: (1.0, 1.0, 2.0).into(),
             // eye: (0.0, 0.0, 2.0).into(),
             target: (0.0, 0.0, 0.0).into(),
@@ -331,13 +335,13 @@ impl State {
             zfar: 1000.0,
         };
 
-        let mut _camera_uniform = CameraUniform::new();
-        _camera_uniform.update_view_proj(&_camera);
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&camera);
 
         let _camera_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
-                label: Some("camera_buffer"),
-                contents: bytemuck::cast_slice(&[_camera_uniform]),
+                label: Some("_camera_buffer"),
+                contents: bytemuck::cast_slice(&[camera_uniform]),
                 usage: (
                     wgpu::BufferUsages::UNIFORM |
                     wgpu::BufferUsages::COPY_DST
@@ -525,8 +529,8 @@ impl State {
             queue,
             config,
             depth_texture,
-            _camera,
-            _camera_uniform,
+            camera,
+            camera_uniform,
             _camera_buffer,
             camera_bind_group,
             cube_trackball,
@@ -543,11 +547,21 @@ impl State {
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            println!("resize");
             self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
+            self.camera.configure(&self.config);
+            self.camera_uniform.update_view_proj(&self.camera);
+            self.queue.write_buffer(
+                &self._camera_buffer,
+                0,
+                bytemuck::cast_slice(&[self.camera_uniform]),
+            );
+            self.depth_texture = texture::Texture::create_depth_texture(
+                &self.device,
+                &self.config, "depth_texture",
+            );
             self.cube_trackball.set_viewport_size(&new_size);
         }
     }
@@ -648,7 +662,14 @@ impl State {
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
+    // let window = WindowBuilder::new().build(&event_loop).unwrap();
+    // let a = winit::dpi::PhysicalSize::<u32> { width: 200, height: 400 };
+    // let b = winit::dpi::Size::Physical(a);
+    let window = WindowBuilder::new()
+        .with_title("Hello WGPU")
+        // .with_inner_size(b)
+        .build(&event_loop)
+        .unwrap();
     let mut state = pollster::block_on(State::new(&window));
 
     event_loop.run(move |event, _, control_flow| {

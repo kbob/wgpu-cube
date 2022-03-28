@@ -96,7 +96,8 @@ impl CubeModel {
         out.face_indices.push(3);
 
         let z = Vector3::<f32>::unit_z();
-        let tran = Matrix4::<f32>::from_translation(0.5 * z);
+        let mut tran = Matrix4::<f32>::from_translation(0.5 * z);
+        tran = tran * Matrix4::<f32>::from_translation(3.0 / 128.0 * 0.5 * z);
 
         {
             let rot1 = Matrix4::from_angle_z(Deg::<f32>(180.0));

@@ -6,6 +6,7 @@ use std::time:: {
 use cgmath::prelude::*;
 use cgmath:: {
     Matrix4,
+    Rad,
     Vector2,
     Vector3,
 };
@@ -28,15 +29,15 @@ pub trait Manipulable {
     fn mouse_down(&mut self, pos: &PhysicalPosition<f64>, t: Instant);
     fn mouse_drag(&mut self, pos: &PhysicalPosition<f64>, t: Instant);
     fn mouse_up(&mut self, pos: &PhysicalPosition<f64>, t: Instant);
-    fn orientation(&self, t: Instant) -> Matrix4<f32>;
+    fn orientation(&mut self, t: Instant) -> Matrix4<f32>;
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Trackball {
     cur_xform: Matrix4<f32>,
     first_xform: Matrix4<f32>,
-    _axis: Vector3<f32>,
-    _velocity: f32,
+    axis: Vector3<f32>,
+    velocity: Rad<f32>,
 
     mouse_state: ElementState,
     viewport_size: PhysicalSize<u32>,
@@ -52,8 +53,8 @@ impl Trackball {
         Self {
             cur_xform: Matrix4::<f32>::identity(),
             first_xform: Matrix4::<f32>::identity(),
-            _axis: Vector3::<f32>::unit_z(),
-            _velocity: 0.0,
+            axis: Vector3::<f32>::unit_y(),
+            velocity: Rad::<f32>(0.01),
 
             mouse_state: ElementState::Released,
             viewport_size: *viewport_size,
@@ -110,7 +111,7 @@ impl Manipulable for Trackball {
     }
 
     fn mouse_down(&mut self, pos: &PhysicalPosition<f64>, t: Instant) {
-        self._velocity = 0.0;
+        self.velocity = Rad::<f32>(0.0);
         let surface_pos = self.surface_point(pos);
         self.first_pos = surface_pos;
         self.last_pos = surface_pos;
@@ -135,7 +136,13 @@ impl Manipulable for Trackball {
         self.first_xform = self.compose_xform();
     }
 
-    fn orientation(&self, _t: Instant) -> Matrix4<f32> {
+    fn orientation(&mut self, _t: Instant) -> Matrix4<f32> {
+        if self.mouse_state == ElementState::Released &&
+            self.velocity.0 != 0.0 {
+            self.cur_xform =
+            Matrix4::<f32>::from_axis_angle(self.axis, self.velocity) *
+            self.cur_xform;
+        }
         self.cur_xform
     }
 }
