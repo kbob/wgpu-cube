@@ -4,6 +4,9 @@ use cgmath::{
     Vector3,
 };
 
+const FACE_LENGTH_MM: f32 = 128.0;
+const FACE_DISPLACEMENT_MM: f32 = 3.6;
+
 #[derive(Debug)]
 pub struct CubeModel {
     pub face_vertices: Vec<FaceVertex>,
@@ -58,30 +61,32 @@ impl CubeModel {
             edge_indices: Vec::new(),
         };
 
+        const HFL: f32 = FACE_LENGTH_MM / 2.0;  // half face length
+
         out.face_vertices.push(
             FaceVertex {                // upper left
-                position: [-0.5, 0.5, 0.0],
+                position: [-HFL, HFL, 0.0],
                 normal: [0.0, 0.0, 1.0],
                 tex_coords: [0.0, 1.0],
             },
         );
         out.face_vertices.push(
             FaceVertex {                // upper right
-                position: [0.5, 0.5, 0.0],
+                position: [HFL, HFL, 0.0],
                 normal: [0.0, 0.0, 1.0],
                 tex_coords: [1.0, 1.0],
             },
         );
         out.face_vertices.push(
             FaceVertex {                // lower left
-                position: [-0.5, -0.5, 0.0],
+                position: [-HFL, -HFL, 0.0],
                 normal: [0.0, 0.0, 1.0],
                 tex_coords: [0.0, 0.0],
             },
         );
         out.face_vertices.push(
             FaceVertex {                // lower right
-                position: [0.5, -0.5, 0.0],
+                position: [HFL, -HFL, 0.0],
                 normal: [0.0, 0.0, 1.0],
                 tex_coords: [1.0, 0.0],
             },
@@ -96,8 +101,9 @@ impl CubeModel {
         out.face_indices.push(3);
 
         let z = Vector3::<f32>::unit_z();
-        let mut tran = Matrix4::<f32>::from_translation(0.5 * z);
-        tran = tran * Matrix4::<f32>::from_translation(3.0 / 128.0 * 0.5 * z);
+        let tran = Matrix4::<f32>::from_translation(
+            (HFL + FACE_DISPLACEMENT_MM) * z
+        );
 
         {
             let rot1 = Matrix4::from_angle_z(Deg::<f32>(180.0));
