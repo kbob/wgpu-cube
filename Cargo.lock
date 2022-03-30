@@ -590,12 +590,15 @@ dependencies = [
 name = "hello-wgpu"
 version = "0.1.0"
 dependencies = [
+ "ahash",
  "anyhow",
  "bytemuck",
  "cgmath",
  "env_logger",
  "image",
  "pollster",
+ "stringreader",
+ "tobj",
  "wgpu",
  "winit",
 ]
@@ -1279,6 +1282,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "stringreader"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "913e7b03d63752f6cdd2df77da36749d82669904798fe8944b9ec3d23f159905"
+
+[[package]]
 name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1333,6 +1342,15 @@ dependencies = [
  "jpeg-decoder",
  "miniz_oxide 0.4.4",
  "weezl",
+]
+
+[[package]]
+name = "tobj"
+version = "3.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdf98397d0f69a48a868afaecca753955050ffb62f37d4ec08d1d227921441a4"
+dependencies = [
+ "ahash",
 ]
 
 [[package]]
