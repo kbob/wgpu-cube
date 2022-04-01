@@ -38,11 +38,28 @@ use trackball::{
 //                                  magic in wgpu
 // framebuffer coords
 
+const BACKFACE_CULL: bool = true;
+
+#[allow(dead_code)]
+#[derive(PartialEq)]
+enum Hand {
+    Left,
+    Right,
+}
+const WORLD_HANDEDNESS: Hand = Hand::Right;
+
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0,  0.0,  0.0,  0.0,
     0.0,  1.0,  0.0,  0.0,
     0.0,  0.0, -0.5,  0.0,
+    0.0,  0.0,  0.5,  1.0,
+);
+#[rustfmt::skip]
+pub const LEFT_HAND_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
+    1.0,  0.0,  0.0,  0.0,
+    0.0,  1.0,  0.0,  0.0,
+    0.0,  0.0,  0.5,  0.0,
     0.0,  0.0,  0.5,  1.0,
 );
 
@@ -65,7 +82,11 @@ impl Camera {
             self.znear,
             self.zfar,
         );
-        return OPENGL_TO_WGPU_MATRIX * proj * view;
+        let convert = match WORLD_HANDEDNESS {
+            Hand::Left => LEFT_HAND_TO_WGPU_MATRIX,
+            Hand::Right => OPENGL_TO_WGPU_MATRIX,
+        };
+        convert * proj * view
     }
 
     fn configure(&mut self, config: &wgpu::SurfaceConfiguration) {
@@ -193,8 +214,10 @@ fn create_render_pipeline(
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                // cull_mode: Some(wgpu::Face::Back),
-                cull_mode: None,
+                cull_mode: match BACKFACE_CULL {
+                    true => Some(wgpu::Face::Back),
+                    false => None,
+                },
                 polygon_mode: wgpu::PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,
@@ -203,8 +226,12 @@ fn create_render_pipeline(
                 wgpu::DepthStencilState {
                     format,
                     depth_write_enabled: true,
-                    // depth_compare: wgpu::CompareFunction::Less,
-                    depth_compare: wgpu::CompareFunction::Greater,
+                    depth_compare:
+                        match WORLD_HANDEDNESS {
+                            Hand::Left => wgpu::CompareFunction::Less,
+                            Hand::Right => wgpu::CompareFunction::Greater,
+                        },
+                    // depth_compare: wgpu::CompareFunction::Greater,
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
                 }),
@@ -262,35 +289,7 @@ impl State {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) };
-        // for adapter in instance.enumerate_adapters(wgpu::Backends::all()) {
-        //     println!("adapter = {:?}", adapter);
-        //     println!("  info = {:?}", adapter.get_info());
-        //     println!("  features = {:?}", adapter.features());
-        //     println!("  limits = {:?}", adapter.limits());
-        //     println!(
-        //         "  downlevel caps = {:?}",
-        //         adapter.get_downlevel_properties()
-        //     );
-        //     println!("  textures:");
-        //     println!(
-        //         "    Depth24Plus         = {:?}",
-        //         adapter.get_texture_format_features(
-        //             wgpu::TextureFormat::Depth24Plus
-        //         )
-        //     );
-        //     println!(
-        //         "    Depth24PlusStencil8 = {:?}",
-        //         adapter.get_texture_format_features(
-        //             wgpu::TextureFormat::Depth24PlusStencil8
-        //         )
-        //     );
-        //     println!(
-        //         "    Depth32Float        = {:?}",
-        //         adapter.get_texture_format_features(
-        //             wgpu::TextureFormat::Depth32Float
-        //         )
-        //     );
-        // }
+
         let adapter = instance.request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -298,6 +297,7 @@ impl State {
                 force_fallback_adapter: false,
             },
         ).await.unwrap();
+
         let (device, queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
                 features: wgpu::Features::empty(),
@@ -307,12 +307,6 @@ impl State {
             None,
         ).await.unwrap();
 
-        // println!("window size = {:?}", size);
-        // println!("window scale factor = {:?}", window.scale_factor());
-        // println!(
-        //     "surface preferred texture format = {:?}",
-        //     surface.get_preferred_format(&adapter)
-        // );
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface.get_preferred_format(&adapter).unwrap(),
@@ -492,9 +486,13 @@ impl State {
         // Pipeline
 
         let depth_texture = texture::Texture::create_depth_texture(
+            "depth_texture",
             &device,
             &config,
-            "depth_texture",
+            match WORLD_HANDEDNESS {
+                Hand::Left => wgpu::CompareFunction::LessEqual,
+                Hand::Right => wgpu::CompareFunction::GreaterEqual,
+            },
         );
         let pipeline_layout = device.create_pipeline_layout(
             &wgpu::PipelineLayoutDescriptor {
@@ -507,16 +505,16 @@ impl State {
             }
         );
         let render_pipeline = create_render_pipeline(
-            "cube_face_pipeline",       // label
-            &device,                    // device
-            &pipeline_layout,           // layout
-            config.format,              // color_format
-            Some(texture::Texture::DEPTH_FORMAT), // depth_format
-            &[                          // vertex_layouts
+            "cube_face_pipeline",                   // label
+            &device,                                // device
+            &pipeline_layout,                       // layout
+            config.format,                          // color_format
+            Some(texture::Texture::DEPTH_FORMAT),   // depth_format
+            &[                                      // vertex_layouts
                 cube_model::FaceVertex::desc(),
                 FaceInstanceRaw::desc(),
             ],
-            cube_face_shader,           // shader
+            cube_face_shader,                       // shader
         );
 
         // Results
@@ -558,8 +556,13 @@ impl State {
                 bytemuck::cast_slice(&[self.camera_uniform]),
             );
             self.depth_texture = texture::Texture::create_depth_texture(
+                "depth_texture",
                 &self.device,
-                &self.config, "depth_texture",
+                &self.config,
+                match WORLD_HANDEDNESS {
+                    Hand::Left => wgpu::CompareFunction::LessEqual,
+                    Hand::Right => wgpu::CompareFunction::GreaterEqual,
+                },
             );
             self.cube_trackball.set_viewport_size(&new_size);
         }
@@ -587,6 +590,10 @@ impl State {
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        let z_far = match WORLD_HANDEDNESS {
+            Hand::Left => 1.0,
+            Hand::Right => 0.0,
+        };
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(
             &wgpu::TextureViewDescriptor::default()
@@ -621,8 +628,7 @@ impl State {
                             view: & self.depth_texture.view,
                             depth_ops: Some(
                                 wgpu::Operations {
-                                    // load: wgpu::LoadOp::Clear(1.0),
-                                    load: wgpu::LoadOp::Clear(0.0),
+                                    load: wgpu::LoadOp::Clear(z_far),
                                     store: true,
                                 }
                             ),
@@ -631,24 +637,26 @@ impl State {
                     ),
                 },
             );
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.diffuse_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.face_vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(
-                1,
-                self.cube_face_instance_buffer.slice(..),
-            );
-            render_pass.set_index_buffer(
-                self.face_index_buffer.slice(..),
-                wgpu::IndexFormat::Uint32
-            );
-            let face_instance_count = self.cube_face_instances.len();
-            render_pass.draw_indexed(
-                0..self.face_index_count,
-                0,
-                0..face_instance_count as _
+            if true {
+                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                render_pass.set_bind_group(1, &self.diffuse_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.face_vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(
+                    1,
+                    self.cube_face_instance_buffer.slice(..),
                 );
+                render_pass.set_index_buffer(
+                    self.face_index_buffer.slice(..),
+                    wgpu::IndexFormat::Uint32
+                );
+                let face_instance_count = self.cube_face_instances.len();
+                render_pass.draw_indexed(
+                    0..self.face_index_count,
+                    0,
+                    0..face_instance_count as _
+                    );
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -661,18 +669,13 @@ impl State {
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
-    // let window = WindowBuilder::new().build(&event_loop).unwrap();
-    // let a = winit::dpi::PhysicalSize::<u32> { width: 200, height: 400 };
-    // let b = winit::dpi::Size::Physical(a);
     let window = WindowBuilder::new()
         .with_title("Hello WGPU")
-        // .with_inner_size(b)
         .build(&event_loop)
         .unwrap();
     let mut state = pollster::block_on(State::new(&window));
 
     event_loop.run(move |event, _, control_flow| {
-        // println!("event = {:?}", event);
         match event {
 
             Event::WindowEvent {

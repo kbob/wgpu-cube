@@ -71,14 +71,18 @@ var s_diffuse: sampler;
 fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let t_coord = vec2<f32>(in.tex_coords[0], 1.0 - in.tex_coords[1]);
     let tex = textureSample(t_diffuse, s_diffuse, t_coord) * 3.0 - 1.0;
-    if (tex[2] < 0.1) {
-        discard;
-    }
+
+    // if (tex[2] < 0.1) {
+    //     discard;
+    // }
+
     // let c = vec3<f32>(0.3, 0.7, 0.6);
     // let r = c[0] + 0.5 * in.tex_coords[0] - tex[0];
     // let g = c[1] + 0.5 * in.tex_coords[1] - tex[1];
     // let b = c[2] - tex[2];
     // let a = tex[3];
+    // return vec4<f32>(r, g, b, a);
+
     let r = min(in.tex_coords[0] * in.tex_coords[0], tex[2]);
     let g = min(in.tex_coords[1] * in.tex_coords[1], tex[2]);
     let b = 0.0;
@@ -92,6 +96,4 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     // let b = 0.;
     // let a = 1.0;
     // return vec4<f32>(r, g, b, a);
-
-    // return vec4<f32>(0.6, 0.2, 0.3, 1.0);
 }
