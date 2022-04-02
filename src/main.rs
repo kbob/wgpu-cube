@@ -300,9 +300,9 @@ impl State {
 
         let (device, queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
+                label: Some("device"),
                 features: wgpu::Features::empty(),
                 limits: wgpu::Limits::default(),
-                label: Some("device"),
             },
             None,
         ).await.unwrap();
@@ -344,6 +344,7 @@ impl State {
 
         let camera_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
+                label: Some("camera_bind_group_layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
@@ -356,12 +357,12 @@ impl State {
                         count: None,
                     },
                 ],
-                label: Some("camera_bind_group_layout"),
             }
         );
 
         let camera_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
+                label: Some("camera_bind_group"),
                 layout: &camera_bind_group_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
@@ -369,7 +370,6 @@ impl State {
                         resource: _camera_buffer.as_entire_binding(),
                     }
                 ],
-                label: Some("camera_bind_group"),
             }
         );
 
@@ -436,6 +436,7 @@ impl State {
 
         let texture_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
+                label: Some("texture_bind_group_layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
@@ -458,13 +459,13 @@ impl State {
                         count: None,
                     },
                 ],
-                label: Some("texture_bind_group_layout"),
             }
         );
 
         let diffuse_bind_group = device.create_bind_group(
             &wgpu::BindGroupDescriptor {
                 layout: &texture_bind_group_layout,
+                label: Some("diffuse_bind_group"),
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
@@ -479,7 +480,6 @@ impl State {
                         ),
                     },
                 ],
-                label: Some("diffuse_bind_group"),
             }
         );
 
