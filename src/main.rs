@@ -8,6 +8,7 @@ use winit::{
 };
 
 mod cube_model;
+mod junk;
 mod texture;
 mod trackball;
 use trackball::{
@@ -47,6 +48,10 @@ enum Hand {
     Right,
 }
 const WORLD_HANDEDNESS: Hand = Hand::Right;
+
+const BACKGROUND_COLOR: wgpu::Color = wgpu::Color {
+    r: 0.00250, g: 0.00625, b: 0.01500, a: 1.0,
+};
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -231,7 +236,6 @@ fn create_render_pipeline(
                             Hand::Left => wgpu::CompareFunction::Less,
                             Hand::Right => wgpu::CompareFunction::Greater,
                         },
-                    // depth_compare: wgpu::CompareFunction::Greater,
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
                 }),
@@ -261,7 +265,7 @@ fn create_render_pipeline(
 
 struct State {
     size: winit::dpi::PhysicalSize<u32>,
-    surface: wgpu::Surface, 
+    surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
@@ -431,7 +435,7 @@ impl State {
             &device,
             &queue,
             diffuse_bytes,
-            "hi.png"
+            "hi.png",
         ).unwrap();
 
         let texture_bind_group_layout = device.create_bind_group_layout(
@@ -571,7 +575,7 @@ impl State {
     pub fn handle_window_event(&mut self, event: &WindowEvent) -> bool {
         self.cube_trackball.handle_window_event(event)
     }
-    
+
     pub fn update(&mut self) {
         let now = std::time::Instant::now();
         let cube_to_world = self.cube_trackball.orientation(now);
@@ -586,7 +590,6 @@ impl State {
             0,
             bytemuck::cast_slice(self.cube_face_instance_data.as_slice()),
         );
-        
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -611,14 +614,7 @@ impl State {
                             view: &view,
                             resolve_target: None,
                             ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(
-                                    wgpu::Color {
-                                        r: 0.00250,
-                                        g: 0.00625,
-                                        b: 0.01500,
-                                        a: 1.0,
-                                    }
-                                ),
+                                load: wgpu::LoadOp::Clear(BACKGROUND_COLOR),
                                 store: true,
                             },
                         },
@@ -638,17 +634,23 @@ impl State {
                 },
             );
             if true {
+
+                // This code renders the cube faces.
+
                 render_pass.set_pipeline(&self.render_pipeline);
                 render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
                 render_pass.set_bind_group(1, &self.diffuse_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, self.face_vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(
+                    0,
+                    self.face_vertex_buffer.slice(..),
+                );
                 render_pass.set_vertex_buffer(
                     1,
                     self.cube_face_instance_buffer.slice(..),
                 );
                 render_pass.set_index_buffer(
                     self.face_index_buffer.slice(..),
-                    wgpu::IndexFormat::Uint32
+                    wgpu::IndexFormat::Uint32,
                 );
                 let face_instance_count = self.cube_face_instances.len();
                 render_pass.draw_indexed(
@@ -726,7 +728,7 @@ fn main() {
             Event::MainEventsCleared => {
                 window.request_redraw();
             }
-            
+
             _ => {}
         }
     });

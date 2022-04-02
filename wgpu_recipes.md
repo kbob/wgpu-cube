@@ -5,7 +5,7 @@ This will be a set of checklists for adding functionality to wgpu-based projects
 ## Add a vertex input
 
 * Define structure FooData
-* Define 
+* Define
 * ...
 
 ## Add a field to a vertex input
@@ -20,5 +20,4 @@ This will be a set of checklists for adding functionality to wgpu-based projects
 
 * Define vertex inputs in FooVertex
 * Define vertex outputs in foo.wgsl `struct VertexOutput`
-* 
-
+* ???

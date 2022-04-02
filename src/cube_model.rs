@@ -7,11 +7,15 @@ use cgmath::{
 };
 use stringreader::StringReader;
 
+const PIXELS_PER_SIDE: u32 = 64;
+const FACE_COUNT: u32 = 6;
 const FACE_LENGTH_MM: f32 = 128.0;
 const FACE_DISPLACEMENT_MM: f32 = 3.6;
 
 #[derive(Debug)]
 pub struct CubeModel {
+    pub pixels_per_side: u32,
+    pub face_count: u32,
     pub face_vertices: Vec<FaceVertex>,
     pub face_indices: Vec<u32>,
     pub face_xforms: Vec<Matrix4<f32>>,
@@ -36,7 +40,7 @@ impl FaceVertex {
             1 => Float32x3,
             2 => Float32x2
         ];
-    
+
     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         use std::mem::size_of;
         wgpu::VertexBufferLayout {
@@ -79,6 +83,8 @@ impl CubeModel {
         let mut _bar: Vec<u32> = vec![0; edge_tri_count];
 
         let mut out = Self {
+            face_count: FACE_COUNT,
+            pixels_per_side: PIXELS_PER_SIDE,
             face_vertices: Vec::new(),
             face_indices: Vec::new(),
             face_xforms: Vec::new(),

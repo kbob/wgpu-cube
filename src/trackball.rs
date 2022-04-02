@@ -71,7 +71,7 @@ impl Trackball {
         // Henriksen, Sporing, Hornbaek
         // Virtual Trackballs Revisited
         // DOI:10.1109/TVCG.2004.1260772
-    
+
         let pos = Vector2::<f64>::new(
             pos.x / (self.viewport_size.width as f64) * 2.0 - 1.0,
             pos.y / (self.viewport_size.height as f64) * -2.0 + 1.0,
@@ -152,7 +152,7 @@ impl Responder for Trackball {
         match evt {
 
             WindowEvent::MouseInput {
-                button: MouseButton::Left, 
+                button: MouseButton::Left,
                 state: new_state,
                 ..
             } => {
