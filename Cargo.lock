@@ -587,23 +587,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hello-wgpu"
-version = "0.1.0"
-dependencies = [
- "ahash",
- "anyhow",
- "bytemuck",
- "cgmath",
- "env_logger",
- "image",
- "pollster",
- "stringreader",
- "tobj",
- "wgpu",
- "winit",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1589,6 +1572,23 @@ dependencies = [
  "thiserror",
  "wgpu-hal",
  "wgpu-types",
+]
+
+[[package]]
+name = "wgpu-cube"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "anyhow",
+ "bytemuck",
+ "cgmath",
+ "env_logger",
+ "image",
+ "pollster",
+ "stringreader",
+ "tobj",
+ "wgpu",
+ "winit",
 ]
 
 [[package]]

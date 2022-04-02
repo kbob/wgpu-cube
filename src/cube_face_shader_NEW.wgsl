@@ -6,16 +6,22 @@ struct CameraUniform {
 [[group(0), binding(0)]]
 var<uniform> camera: CameraUniform;
 
-struct InstanceInput {
-    [[location(5)]] cube_to_world_0: vec4<f32>;
-    [[location(6)]] cube_to_world_1: vec4<f32>;
-    [[location(7)]] cube_to_world_2: vec4<f32>;
-    [[location(8)]] cube_to_world_3: vec4<f32>;
+struct CubeUniform {
+    cube_to_world: mat4x4<f32>;
+};
+[[group(1), binding(0)]]
+var<uniform> cube: CubeUniform;
 
-    [[location(9)]] face_to_cube_0: vec4<f32>;
-    [[location(10)]] face_to_cube_1: vec4<f32>;
-    [[location(11)]] face_to_cube_2: vec4<f32>;
-    [[location(12)]] face_to_cube_3: vec4<f32>;
+struct InstanceStaticInput {
+    // [[location(5)]] cube_to_world_0: vec4<f32>;
+    // [[location(6)]] cube_to_world_1: vec4<f32>;
+    // [[location(7)]] cube_to_world_2: vec4<f32>;
+    // [[location(8)]] cube_to_world_3: vec4<f32>;
+
+    [[location(5)]] face_to_cube_0: vec4<f32>;
+    [[location(6)]] face_to_cube_1: vec4<f32>;
+    [[location(7)]] face_to_cube_2: vec4<f32>;
+    [[location(8)]] face_to_cube_3: vec4<f32>;
 };
 
 struct VertexInput {
@@ -33,14 +39,15 @@ struct VertexOutput {
 [[stage(vertex)]]
 fn vs_main(
     model: VertexInput,
-    instance: InstanceInput,
+    instance: InstanceStaticInput,
 ) -> VertexOutput {
-    let cube_to_world = mat4x4<f32>(
-        instance.cube_to_world_0,
-        instance.cube_to_world_1,
-        instance.cube_to_world_2,
-        instance.cube_to_world_3,
-    );
+    // let cube_to_world = mat4x4<f32>(
+    //     instance.cube_to_world_0,
+    //     instance.cube_to_world_1,
+    //     instance.cube_to_world_2,
+    //     instance.cube_to_world_3,
+    // );
+    let cube_to_world = cube.cube_to_world;
     let face_to_cube = mat4x4<f32>(
         instance.face_to_cube_0,
         instance.face_to_cube_1,
@@ -62,9 +69,9 @@ fn vs_main(
 
 // Fragment shader
 
-[[group(1), binding(0)]]
+[[group(2), binding(0)]]
 var t_diffuse: texture_2d<f32>;
-[[group(1), binding(1)]]
+[[group(2), binding(1)]]
 var s_diffuse: sampler;
 
 [[stage(fragment)]]

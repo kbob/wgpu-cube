@@ -34,6 +34,27 @@ trait Renderable<Attributes, PreparedData> {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct CubeUniformRaw {
+    cube_to_world: [[f32; 4]; 4],
+    decal_is_visible: u32,
+}
+
+impl CubeUniformRaw {
+    fn new() -> Self {
+        Self {
+            cube_to_world: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            decal_is_visible: true as u32,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct FaceStaticInstanceRaw {
     face_to_cube: [[f32; 4]; 4],
     texture_offset: [u32; 2],
@@ -87,6 +108,15 @@ impl FaceStaticInstanceRaw {
 
 pub struct Cube {
 
+    // Whole Cube Data
+
+    #[allow(dead_code)]
+    cube_uniform: CubeUniformRaw,
+    #[allow(dead_code)]
+    cube_uniform_buffer: wgpu::Buffer,
+    #[allow(dead_code)]
+    cube_uniform_bind_group: wgpu::BindGroup,
+
     // Face Data
 
     face_instance_count: u32,
@@ -99,15 +129,14 @@ pub struct Cube {
 
     // Edge Data
 
-    // edge_index_count: u32,
-    // edge_vertex_buffer: wgpu::Buffer,
-    // edge_vertex_index_buffer: wgpu::Buffer,
-    // edge_texture_bind_group: wgpu::BindGroup,
-    // edge_pipeline: wgpu::RenderPipeline,
+    edge_vertex_buffer: wgpu::Buffer,
+    edge_vertex_index_count: u32,
+    edge_vertex_index_buffer: wgpu::Buffer,
+    edge_pipeline: wgpu::RenderPipeline,
 }
 
 impl Cube {
-    fn new(
+    pub fn _new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         color_format: wgpu::TextureFormat,
@@ -141,6 +170,49 @@ impl Cube {
         //      edge pipeline
 
         let model = cube_model::CubeModel::new();
+        let cube_uniform = CubeUniformRaw::new();
+        let cube_uniform_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("cube_uniform_buffer"),
+                contents: bytemuck::cast_slice(&[cube_uniform]),
+                usage: (
+                    wgpu::BufferUsages::UNIFORM |
+                    wgpu::BufferUsages::COPY_DST
+                ),
+            }
+        );
+        let cube_uniform_bind_group_layout = device.create_bind_group_layout(
+            &wgpu::BindGroupLayoutDescriptor {
+                label: Some("cube_bind_group"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ]
+            }
+        );
+        let cube_uniform_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                label: Some("cube_bind_group"),
+                layout: &cube_uniform_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: cube_uniform_buffer.as_entire_binding(),
+                    }
+                ],
+            }
+        );
+
+        // Face Initialization
+
         let face_instance_count = model.face_count;
         let face_instance_buffer = {
             let data = model.face_xforms.iter().enumerate().map( {
@@ -159,7 +231,6 @@ impl Cube {
                 }
             )
         };
-        let face_vertex_index_count = model.face_indices.len() as u32;
         let face_vertex_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("face_vertex_buffer"),
@@ -167,6 +238,7 @@ impl Cube {
                 usage: wgpu::BufferUsages::VERTEX,
             }
         );
+        let face_vertex_index_count = model.face_indices.len() as u32;
         let face_vertex_index_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("face_vertex_index_buffer"),
@@ -237,6 +309,7 @@ impl Cube {
                     label: Some("face_pipeline_layout"),
                     bind_group_layouts: &[
                         &camera_bind_group_layout,
+                        &cube_uniform_bind_group_layout,
                         &face_texture_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
@@ -261,9 +334,58 @@ impl Cube {
             )
         };
 
+        // Edge Initialization
 
+        let edge_vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("edge_vertex_buffer"),
+                contents: bytemuck::cast_slice(model.edge_vertices.as_slice()),
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+        let edge_vertex_index_count = model.edge_indices.len() as u32;
+        println!("edge_vertex_index_count = {:?}", edge_vertex_index_count);
+        let edge_vertex_index_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("edge_vertex_index_buffer"),
+                contents: bytemuck::cast_slice(model.edge_indices.as_slice()),
+                usage: wgpu::BufferUsages::INDEX,
+            }
+        );
+        let edge_pipeline = {
+            let layout = device.create_pipeline_layout(
+                &wgpu::PipelineLayoutDescriptor {
+                    label: Some("edge_pipeline_layout"),
+                    bind_group_layouts: &[
+                        &camera_bind_group_layout,
+                        &cube_uniform_bind_group_layout,
+                    ],
+                    push_constant_ranges: &[],
+                }
+            );
+            let shader_text = include_str!("cube_edge_shader.wgsl");
+            let shader = wgpu::ShaderModuleDescriptor {
+                label: Some("cube_edge_shader"),
+                source: wgpu::ShaderSource::Wgsl(shader_text.into()),
+            };
+            crate::create_render_pipeline(
+                "edge_pipeline",
+                device,
+                &layout,
+                color_format,
+                Some(texture::Texture::DEPTH_FORMAT),
+                &[
+                    cube_model::EdgeVertex::desc(),
+                ],
+                shader,
+            )
+        };
 
         Self {
+            cube_uniform,
+            cube_uniform_buffer,
+            cube_uniform_bind_group,
+
             face_instance_count,
             face_instance_buffer,
             face_vertex_buffer,
@@ -272,11 +394,10 @@ impl Cube {
             face_texture_bind_group,
             face_pipeline,
 
-            // edge_index_count,
-            // edge_vertex_buffer,
-            // edge_vertex_index_buffer,
-            // edge_texture_bind_group,
-            // edge_pipeline,
+            edge_vertex_buffer,
+            edge_vertex_index_count,
+            edge_vertex_index_buffer,
+            edge_pipeline,
         }
     }
 }
@@ -298,41 +419,42 @@ impl Renderable<CubeAttributes, CubePreparedData> for Cube {
 
     fn render<'rpass>(
         &'rpass self,
-        _render_pass: &mut wgpu::RenderPass<'rpass>,
+        render_pass: &mut wgpu::RenderPass<'rpass>,
         _prepared: &'rpass CubePreparedData,
     ) {
         // Render Faces
 
-        _render_pass.set_pipeline(&self.face_pipeline);
+        render_pass.set_pipeline(&self.face_pipeline);
         // Camera bind group is set elsewhere.
-        // _render_pass.set_bind_group(0, &camera_bind_group, &[]);
-        _render_pass.set_bind_group(1, &self.face_texture_bind_group, &[]);
-        _render_pass.set_vertex_buffer(0, self.face_vertex_buffer.slice(..));
-        _render_pass.set_vertex_buffer(1, self.face_instance_buffer.slice(..));
-        _render_pass.set_index_buffer(
+        // render_pass.set_bind_group(0, &camera_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.cube_uniform_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.face_texture_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.face_vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, self.face_instance_buffer.slice(..));
+        render_pass.set_index_buffer(
             self.face_vertex_index_buffer.slice(..),
             wgpu::IndexFormat::Uint32,
         );
-        _render_pass.draw_indexed(
+        render_pass.draw_indexed(
             0..self.face_vertex_index_count,
             0,
             0..self.face_instance_count,
         );
 
-        // // Render Edges
+        // Render Edges
 
-        // _render_pass.set_pipeline(&self.edge_pipeline);
-        // // _render_pass.set_bind_group(0, &camera_bind_group, &[]);
-        // _render_pass.set_vertex_buffer(0, self.edge_vertex_buffer.slice(..));
-        // _render_pass.set_index_buffer(
-        //     self.edge_vertex_index_buffer.slice(..),
-        //     wgpu::IndexFormat::Uint32,
-        // );
-        // _render_pass.draw_indexed(
-        //     0..self.edge_index_count,
-        //     0,
-        //     0..1,
-        // );
+        render_pass.set_pipeline(&self.edge_pipeline);
+        // render_pass.set_bind_group(0, &camera_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.edge_vertex_buffer.slice(..));
+        render_pass.set_index_buffer(
+            self.edge_vertex_index_buffer.slice(..),
+            wgpu::IndexFormat::Uint32,
+        );
+        render_pass.draw_indexed(
+            0..self.edge_vertex_index_count,
+            0,
+            0..1,
+        );
     }
 }
 

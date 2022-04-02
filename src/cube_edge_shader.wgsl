@@ -8,13 +8,14 @@ struct VertexInput {
 struct CameraUniform {
    view_xform: mat4x4<f32>;
 };
-[[group(1), binding(0)]]
+[[group(0), binding(0)]]
 var<uniform> camera: CameraUniform;
 
 struct CubeUniform {
     obj_xform: mat4x4<f32>;
+    decal_is_visible: u32;
 };
-[[group(2), binding(0)]]
+[[group(1), binding(0)]]
 var<uniform> cube: CubeUniform;
 
 struct VertexOutput {
@@ -35,6 +36,6 @@ fn vs_main(
 // Fragment shader
 
 [[stage(fragment)]]
-fn fw_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     return vec4<f32>(0.6, 0.4, 0.1, 1.0);
 }

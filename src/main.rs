@@ -7,23 +7,14 @@ use winit::{
     window::WindowBuilder,
 };
 
-mod cube_model;
-mod junk;
+mod cube;
+mod cube_model;                     // XXX
 mod texture;
 mod trackball;
 use trackball::{
     Manipulable,
     Responder,
 };
-
-// Question:
-//    Should each instance be a face and the cube be uniform?
-//    or should face data be per-vertex and the cube be an instance?
-//  A is slightly more efficient?
-//  B is more general, if I ever want two cubes.
-//
-//  Choose B.
-//      The cube model has six faces, each transformed to cube coordinates.
 
 // Transformation sequence.
 //
@@ -206,6 +197,7 @@ fn create_render_pipeline(
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(&shader);
 
+
     device.create_render_pipeline(
         &wgpu::RenderPipelineDescriptor {
             label: Some(label),
@@ -380,6 +372,7 @@ impl State {
         // Cube Model
 
         let model = cube_model::CubeModel::new();
+        let _c = cube::Cube::_new(&device, &queue, config.format, &camera_bind_group_layout);
 
         let cube_trackball = trackball::Trackball::new(&size);
 
