@@ -22,6 +22,7 @@ struct InstanceStaticInput {
     [[location(6)]] face_to_cube_1: vec4<f32>;
     [[location(7)]] face_to_cube_2: vec4<f32>;
     [[location(8)]] face_to_cube_3: vec4<f32>;
+    [[location(9)]] tex_offset: vec2<f32>;
 };
 
 struct VertexInput {
@@ -63,7 +64,11 @@ fn vs_main(
     var out: VertexOutput;
     out.clip_position = pos;
     out.normal = model.normal;
-    out.tex_coords = model.tex_coords;
+    out.tex_coords = instance.tex_offset + model.tex_coords;
+    // out.tex_coords = vec2<f32>(
+    //     instance.tex_offset.x + model.tex_coords.x,
+    //     instance.tex_offset.y + model.tex_coords.y
+    // );
     return out;
 }
 
@@ -76,8 +81,19 @@ var s_diffuse: sampler;
 
 [[stage(fragment)]]
 fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
-    let t_coord = vec2<f32>(in.tex_coords[0], 1.0 - in.tex_coords[1]);
-    let tex = textureSample(t_diffuse, s_diffuse, t_coord) * 3.0 - 1.0;
+    // 0 <= x <= 6; 0 <= y <= 1
+    let t_coord = vec2<f32>(in.tex_coords.x, 1.0 - in.tex_coords.y);
+    let pixel_scale: f32 = 64.0;
+    let pix_coord = t_coord * 64.0;
+    let pix_center = round(pix_coord);
+    let tex_index = pix_center / vec2<f32>(64.0 * 6.0, 64.0);
+    let tex = textureSample(t_diffuse, s_diffuse, tex_index);
+    let pix_pos = pix_coord - pix_center;
+    let r2: f32 = pix_pos.x * pix_pos.x + pix_pos.y * pix_pos.y;
+    if (r2 < 0.10) {
+        return vec4<f32>(0.5, 0.0, 0.3, 1.0);
+    }
+    return tex * 0.2;
 
     // if (tex[2] < 0.1) {
     //     discard;
@@ -90,11 +106,6 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     // let a = tex[3];
     // return vec4<f32>(r, g, b, a);
 
-    let r = min(in.tex_coords[0] * in.tex_coords[0], tex[2]);
-    let g = min(in.tex_coords[1] * in.tex_coords[1], tex[2]);
-    let b = 0.0;
-    let a = tex[2];
-    return vec4<f32>(r, g, b, a);
 
     // return textureSample(t_diffuse, s_diffuse, in.tex_coords);
 

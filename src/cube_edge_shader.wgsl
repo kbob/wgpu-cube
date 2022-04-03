@@ -37,5 +37,6 @@ fn vs_main(
 
 [[stage(fragment)]]
 fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
-    return vec4<f32>(0.6, 0.4, 0.1, 1.0);
+    return vec4<f32>(0.718, 0.055, 0.0, 1.0);
+    // return vec4<f32>(0.5, 0.2, 0.01, 1.0);
 }

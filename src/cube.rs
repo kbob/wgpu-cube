@@ -19,7 +19,7 @@ use wgpu::util::DeviceExt;
 use crate::cube_model;
 use crate::texture;
 
-trait Renderable<Attributes, PreparedData> {
+pub trait Renderable<Attributes, PreparedData> {
 
     fn update(&mut self) {}     // optional method
 
@@ -57,7 +57,7 @@ impl CubeUniformRaw {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct FaceStaticInstanceRaw {
     face_to_cube: [[f32; 4]; 4],
-    texture_offset: [u32; 2],
+    texture_offset: [f32; 2],
 }
 
 impl FaceStaticInstanceRaw {
@@ -93,7 +93,7 @@ impl FaceStaticInstanceRaw {
                 wgpu::VertexAttribute {
                     offset: size_of::<[f32; 16]>() as wgpu::BufferAddress,
                     shader_location: 9,
-                    format: wgpu::VertexFormat::Uint32x2,
+                    format: wgpu::VertexFormat::Float32x2,
                 },
             ],
         }
@@ -114,7 +114,7 @@ pub struct Cube {
     cube_uniform: CubeUniformRaw,
     #[allow(dead_code)]
     cube_uniform_buffer: wgpu::Buffer,
-    #[allow(dead_code)]
+    // #[allow(dead_code)]
     cube_uniform_bind_group: wgpu::BindGroup,
 
     // Face Data
@@ -219,15 +219,17 @@ impl Cube {
                 |(i, xform)|
                 FaceStaticInstanceRaw {
                     face_to_cube: (*xform as cgmath::Matrix4<f32>).into(),
-                    // face_to_cube: *xform.into(),
-                    texture_offset: [i as u32 * model.pixels_per_side, 0],
+                    texture_offset: [
+                         (face_instance_count - i as u32 - 1) as f32,
+                        0.0],
                 }
             }).collect::<Vec<FaceStaticInstanceRaw>>();
             device.create_buffer_init(
                 &wgpu::util::BufferInitDescriptor {
                     label: Some("face_instance_buffer"),
                     contents: bytemuck::cast_slice(data.as_slice()),
-                    usage: wgpu::BufferUsages::INDEX,
+                    usage: wgpu::BufferUsages::VERTEX |
+                        wgpu::BufferUsages::COPY_DST,
                 }
             )
         };
@@ -369,15 +371,15 @@ impl Cube {
                 source: wgpu::ShaderSource::Wgsl(shader_text.into()),
             };
             crate::create_render_pipeline(
-                "edge_pipeline",
-                device,
-                &layout,
-                color_format,
-                Some(texture::Texture::DEPTH_FORMAT),
-                &[
+                "edge_pipeline",                        // label
+                device,                                 // device
+                &layout,                                // layout
+                color_format,                           // color_format
+                Some(texture::Texture::DEPTH_FORMAT),   // depth_format
+                &[                                      // vertex_layouts
                     cube_model::EdgeVertex::desc(),
                 ],
-                shader,
+                shader,                                 // shader
             )
         };
 
@@ -402,13 +404,13 @@ impl Cube {
     }
 }
 
-struct CubePreparedData {
+pub struct CubePreparedData {
     // create dynamic data here:
     //      face instance dynamic data
     // is this where the video goes?
 }
 
-struct CubeAttributes {}
+pub struct CubeAttributes {}
 
 impl Renderable<CubeAttributes, CubePreparedData> for Cube {
 
@@ -460,7 +462,8 @@ impl Renderable<CubeAttributes, CubePreparedData> for Cube {
 
 
 // Future Topics
-//  reattach the trackbacll to the cube
+//  reattach the trackball to the cube
+//  FaceInstanceRaw::desc() should use ATTRIBUTES constant.
 //  floor
 //  mirror
 //  shadow
