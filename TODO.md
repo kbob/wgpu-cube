@@ -9,6 +9,7 @@
 
  * ~~remove dead code.~~
  * ~~FaceInstanceRaw::desc() should use ATTRIBUTES constant.~~
+ * ~~rename cube_face_shader_NEW.~~
  * rename cube.texture to cube.decal.
  * move camera to its own file.
 

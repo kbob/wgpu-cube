@@ -264,7 +264,7 @@ impl Cube {
                     push_constant_ranges: &[],
                 }
             );
-            let shader_text = include_str!("cube_face_shader_NEW.wgsl");
+            let shader_text = include_str!("cube_face_shader.wgsl");
             let shader = wgpu::ShaderModuleDescriptor {
                 label: Some("cube_face_shader"),
                 source: wgpu::ShaderSource::Wgsl(shader_text.into()),
