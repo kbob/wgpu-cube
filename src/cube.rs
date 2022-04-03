@@ -28,7 +28,7 @@ struct CubeUniformRaw {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct FaceStaticInstanceRaw {
     face_to_cube: [[f32; 4]; 4],
-    texture_offset: [f32; 2],
+    decal_offset: [f32; 2],
 }
 
 impl FaceStaticInstanceRaw {
@@ -38,7 +38,7 @@ impl FaceStaticInstanceRaw {
         6 => Float32x4,
         7 => Float32x4,
         8 => Float32x4,
-        9 => Float32x2          // texture_offset: vec2<f32>
+        9 => Float32x2          // decal_offset: vec2<f32>
     ];
 
     fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
@@ -65,7 +65,7 @@ pub struct Cube {
     face_vertex_buffer: wgpu::Buffer,
     face_vertex_index_count: u32,
     face_vertex_index_buffer: wgpu::Buffer,
-    face_texture_bind_group: wgpu::BindGroup,
+    face_decal_bind_group: wgpu::BindGroup,
     face_pipeline: wgpu::RenderPipeline,
 
     // Edge Data
@@ -95,7 +95,7 @@ impl Cube {
         //          references vertex data
         //      face vertex index buffer
         //          references vertex index data
-        //      face texture bind group
+        //      face decal bind group
         //          references texture view, sampler
         //          !!! DOES NOT REFERENCE DATA !!!
         //      face pipeline
@@ -166,7 +166,7 @@ impl Cube {
                 |(i, xform)|
                 FaceStaticInstanceRaw {
                     face_to_cube: (*xform as cgmath::Matrix4<f32>).into(),
-                    texture_offset: [
+                    decal_offset: [
                          (face_instance_count - i as u32 - 1) as f32,
                         0.0],
                 }
@@ -195,9 +195,9 @@ impl Cube {
                 usage: wgpu::BufferUsages::INDEX,
             }
         );
-        let face_texture_bind_group_layout = device.create_bind_group_layout(
+        let face_decal_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
-                label: Some("DIN_digits_texture_bind_group_layout"),
+                label: Some("face_decal_bind_group_layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
@@ -222,29 +222,29 @@ impl Cube {
                 ],
             }
         );
-        let face_texture_bind_group = {
-            let texture_bytes = include_bytes!("DIN_digits_linear.png");
-            let texture = texture::Texture::from_bytes(
+        let face_decal_bind_group = {
+            let decal_bytes = include_bytes!("DIN_digits_linear.png");
+            let decal_texture = texture::Texture::from_bytes(
                 &device,
                 &queue,
-                texture_bytes,
+                decal_bytes,
                 "DIN_digits_linear.png",
             ).unwrap();
             device.create_bind_group(
                 &wgpu::BindGroupDescriptor {
-                    layout: &face_texture_bind_group_layout,
-                    label: Some("DIN_digits_texture_bind_group"),
+                    layout: &face_decal_bind_group_layout,
+                    label: Some("face_decal_bind_group"),
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
                             resource: wgpu::BindingResource::TextureView(
-                                &texture.view,
+                                &decal_texture.view,
                             ),
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
                             resource: wgpu::BindingResource::Sampler(
-                                &texture.sampler,
+                                &decal_texture.sampler,
                             ),
                         },
                     ],
@@ -259,7 +259,7 @@ impl Cube {
                     bind_group_layouts: &[
                         &camera_bind_group_layout,
                         &cube_uniform_bind_group_layout,
-                        &face_texture_bind_group_layout,
+                        &face_decal_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
                 }
@@ -340,7 +340,7 @@ impl Cube {
             face_vertex_buffer,
             face_vertex_index_count,
             face_vertex_index_buffer,
-            face_texture_bind_group,
+            face_decal_bind_group,
             face_pipeline,
 
             edge_vertex_buffer,
@@ -397,7 +397,7 @@ impl Renderable<CubeAttributes, CubePreparedData> for Cube {
         // Camera bind group is set elsewhere.
         // render_pass.set_bind_group(0, &camera_bind_group, &[]);
         render_pass.set_bind_group(1, &self.cube_uniform_bind_group, &[]);
-        render_pass.set_bind_group(2, &self.face_texture_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.face_decal_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.face_vertex_buffer.slice(..));
         render_pass.set_vertex_buffer(1, self.face_instance_buffer.slice(..));
         render_pass.set_index_buffer(

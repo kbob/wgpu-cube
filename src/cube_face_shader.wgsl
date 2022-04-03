@@ -18,19 +18,19 @@ struct InstanceStaticInput {
     [[location(6)]] face_to_cube_1: vec4<f32>;
     [[location(7)]] face_to_cube_2: vec4<f32>;
     [[location(8)]] face_to_cube_3: vec4<f32>;
-    [[location(9)]] tex_offset: vec2<f32>;
+    [[location(9)]] decal_offset: vec2<f32>;
 };
 
 struct VertexInput {
     [[location(0)]] position: vec3<f32>;
     [[location(1)]] normal: vec3<f32>;
-    [[location(2)]] tex_coords: vec2<f32>;
+    [[location(2)]] decal_coords: vec2<f32>;
 };
 
 struct VertexOutput {
     [[builtin(position)]] clip_position: vec4<f32>;
     [[location(0)]] normal: vec3<f32>;
-    [[location(1)]] tex_coords: vec2<f32>;
+    [[location(1)]] decal_coords: vec2<f32>;
 };
 
 [[stage(vertex)]]
@@ -53,7 +53,7 @@ fn vs_main(
     var out: VertexOutput;
     out.clip_position = pos;
     out.normal = model.normal;
-    out.tex_coords = instance.tex_offset + model.tex_coords;
+    out.decal_coords = instance.decal_offset + model.decal_coords;
     return out;
 }
 
@@ -67,14 +67,14 @@ var s_decal: sampler;
 [[stage(fragment)]]
 fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     // 0 <= x <= 6; 0 <= y <= 1
-    let t_coord = vec2<f32>(in.tex_coords.x, 1.0 - in.tex_coords.y);
+    let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
     let pixel_scale: f32 = 64.0;
     let pix_coord = t_coord * 64.0;
     let pix_center = round(pix_coord);
-    let tex_index = pix_center / vec2<f32>(64.0 * 6.0, 64.0);
+    let decal_index = pix_center / vec2<f32>(64.0 * 6.0, 64.0);
     var face_color = vec4<f32>(0.020, 0.020, 0.025, 1.0);
     if (cube.decal_is_visible != 0u) {
-        let decal_color = textureSample(t_decal, s_decal, tex_index);
+        let decal_color = textureSample(t_decal, s_decal, decal_index);
         face_color = max(face_color, decal_color);
     }
     let pix_pos = pix_coord - pix_center;

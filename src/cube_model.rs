@@ -29,7 +29,7 @@ pub struct CubeModel {
 pub struct FaceVertex {
     position: [f32; 3],
     normal: [f32; 3],
-    tex_coords: [f32; 2],
+    decal_coords: [f32; 2],
 }
 
 impl FaceVertex {
@@ -108,28 +108,28 @@ impl CubeModel {
             FaceVertex {                // upper left
                 position: [-HFL, HFL, 0.0],
                 normal: [0.0, 0.0, 1.0],
-                tex_coords: [0.0, 1.0],
+                decal_coords: [0.0, 1.0],
             },
         );
         out.face_vertices.push(
             FaceVertex {                // upper right
                 position: [HFL, HFL, 0.0],
                 normal: [0.0, 0.0, 1.0],
-                tex_coords: [1.0, 1.0],
+                decal_coords: [1.0, 1.0],
             },
         );
         out.face_vertices.push(
             FaceVertex {                // lower left
                 position: [-HFL, -HFL, 0.0],
                 normal: [0.0, 0.0, 1.0],
-                tex_coords: [0.0, 0.0],
+                decal_coords: [0.0, 0.0],
             },
         );
         out.face_vertices.push(
             FaceVertex {                // lower right
                 position: [HFL, -HFL, 0.0],
                 normal: [0.0, 0.0, 1.0],
-                tex_coords: [1.0, 0.0],
+                decal_coords: [1.0, 0.0],
             },
         );
 
