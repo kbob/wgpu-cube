@@ -14,6 +14,7 @@
 // Lifetimes: static, frame, shader, ???
 // Visibility: vertex, fragment, both
 
+use cgmath::prelude::*;
 use wgpu::util::DeviceExt;
 
 use crate::cube_model;
@@ -21,12 +22,11 @@ use crate::texture;
 
 pub trait Renderable<Attributes, PreparedData> {
 
-    fn update(&mut self) {}     // optional method
-
     fn prepare(&self, _: &Attributes) -> PreparedData;
 
     fn render<'rpass>(
         &'rpass self,
+        _: &wgpu::Queue,
         _: &mut wgpu::RenderPass<'rpass>,
         _: &'rpass PreparedData,
     );
@@ -37,21 +37,24 @@ pub trait Renderable<Attributes, PreparedData> {
 struct CubeUniformRaw {
     cube_to_world: [[f32; 4]; 4],
     decal_is_visible: u32,
+    _padding: [u32; 3],
 }
 
-impl CubeUniformRaw {
-    fn new() -> Self {
-        Self {
-            cube_to_world: [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ],
-            decal_is_visible: true as u32,
-        }
-    }
-}
+// impl CubeUniformRaw {
+//     fn new() -> Self {
+//         assert!(std::mem::size_of::<Self>() == 80);
+//         Self {
+//             cube_to_world: [
+//                 [1.0, 0.0, 0.0, 0.0],
+//                 [0.0, 1.0, 0.0, 0.0],
+//                 [0.0, 0.0, 1.0, 0.0],
+//                 [0.0, 0.0, 0.0, 1.0],
+//             ],
+//             decal_is_visible: true as u32,
+//             _padding: [0, 0, 0],
+//         }
+//     }
+// }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -103,18 +106,14 @@ impl FaceStaticInstanceRaw {
 // #[repr(C)]
 // #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 // struct FaceDynamicInstanceRaw {
-//     cube_to_world: [[f32; 4]; 4],
 // }
 
 pub struct Cube {
 
     // Whole Cube Data
 
-    #[allow(dead_code)]
-    cube_uniform: CubeUniformRaw,
-    #[allow(dead_code)]
+    cube_to_world: cgmath::Matrix4<f32>,
     cube_uniform_buffer: wgpu::Buffer,
-    // #[allow(dead_code)]
     cube_uniform_bind_group: wgpu::BindGroup,
 
     // Face Data
@@ -140,13 +139,12 @@ impl Cube {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         color_format: wgpu::TextureFormat,
-        // belt: &wgpu::util::StagingBelt,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         // create static data here:
+        //      face instance static data
         //      face vertex data
         //      face vertex index data
-        //      face instance static data
         //      face texture data
         //      face vertex buffer
         //      face vertex index buffer
@@ -170,17 +168,30 @@ impl Cube {
         //      edge pipeline
 
         let model = cube_model::CubeModel::new();
-        let cube_uniform = CubeUniformRaw::new();
-        let cube_uniform_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
+
+        let cube_to_world = cgmath::Matrix4::identity();
+        // XXX don't need to init buffer; prepare/render set it up.
+        let cube_uniform_buffer = device.create_buffer(
+            &wgpu::BufferDescriptor {
                 label: Some("cube_uniform_buffer"),
-                contents: bytemuck::cast_slice(&[cube_uniform]),
-                usage: (
-                    wgpu::BufferUsages::UNIFORM |
-                    wgpu::BufferUsages::COPY_DST
-                ),
+                size: std::mem::size_of::<CubeUniformRaw>() as u64,
+                usage: (wgpu::BufferUsages::UNIFORM |
+                        wgpu::BufferUsages::COPY_DST),
+                mapped_at_creation: false,
             }
         );
+
+        // let cube_uniform = CubeUniformRaw::new();
+        // let cube_uniform_buffer = device.create_buffer_init(
+        //     &wgpu::util::BufferInitDescriptor {
+        //         label: Some("cube_uniform_buffer"),
+        //         contents: bytemuck::cast_slice(&[cube_uniform]),
+        //         usage: (
+        //             wgpu::BufferUsages::UNIFORM |
+        //             wgpu::BufferUsages::COPY_DST
+        //         ),
+        //     }
+        // );
         let cube_uniform_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
                 label: Some("cube_bind_group"),
@@ -384,7 +395,7 @@ impl Cube {
         };
 
         Self {
-            cube_uniform,
+            cube_to_world,
             cube_uniform_buffer,
             cube_uniform_bind_group,
 
@@ -402,11 +413,16 @@ impl Cube {
             edge_pipeline,
         }
     }
+
+    pub fn update_transform(&mut self, xform: &cgmath::Matrix4<f32>)
+    {
+        self.cube_to_world = *xform;
+    }
 }
 
 pub struct CubePreparedData {
-    // create dynamic data here:
-    //      face instance dynamic data
+    // store any data that is submitted per-frame here.
+    cube_uniform: CubeUniformRaw,
     // is this where the video goes?
 }
 
@@ -416,14 +432,29 @@ impl Renderable<CubeAttributes, CubePreparedData> for Cube {
 
     fn prepare(&self, _attr: &CubeAttributes) -> CubePreparedData
     {
-        CubePreparedData {}
+        CubePreparedData {
+            cube_uniform: CubeUniformRaw {
+                cube_to_world: self.cube_to_world.into(),
+                decal_is_visible: true as u32,
+                _padding: [0, 0, 0],
+            },
+        }
     }
 
     fn render<'rpass>(
         &'rpass self,
+        queue: &wgpu::Queue,
         render_pass: &mut wgpu::RenderPass<'rpass>,
-        _prepared: &'rpass CubePreparedData,
+        prepared: &'rpass CubePreparedData,
     ) {
+        // Transmit transform.
+
+        queue.write_buffer(
+            &self.cube_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[prepared.cube_uniform]),
+        );
+
         // Render Faces
 
         render_pass.set_pipeline(&self.face_pipeline);
@@ -446,6 +477,7 @@ impl Renderable<CubeAttributes, CubePreparedData> for Cube {
         // Render Edges
 
         render_pass.set_pipeline(&self.edge_pipeline);
+        // Camera bind group is set elsewhere.
         // render_pass.set_bind_group(0, &camera_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.edge_vertex_buffer.slice(..));
         render_pass.set_index_buffer(
@@ -464,7 +496,9 @@ impl Renderable<CubeAttributes, CubePreparedData> for Cube {
 // Future Topics
 //  reattach the trackball to the cube
 //  FaceInstanceRaw::desc() should use ATTRIBUTES constant.
+//  rename cube.texture to cube.decal.
 //  floor
 //  mirror
 //  shadow
-//  push constants for cube_to_world transform
+//  use push constants
+//  multisampling

@@ -8,6 +8,7 @@ var<uniform> camera: CameraUniform;
 
 struct CubeUniform {
     cube_to_world: mat4x4<f32>;
+    // decal_is_visible: u32;
 };
 [[group(1), binding(0)]]
 var<uniform> cube: CubeUniform;
@@ -48,7 +49,7 @@ fn vs_main(
     //     instance.cube_to_world_2,
     //     instance.cube_to_world_3,
     // );
-    let cube_to_world = cube.cube_to_world;
+    // let cube_to_world = cube.cube_to_world;
     let face_to_cube = mat4x4<f32>(
         instance.face_to_cube_0,
         instance.face_to_cube_1,
@@ -58,7 +59,7 @@ fn vs_main(
 
     var pos: vec4<f32> = vec4<f32>(model.position, 1.0);
     pos = face_to_cube * pos;
-    pos = cube_to_world * pos;
+    pos = cube.cube_to_world * pos;
     pos = camera.view_proj * pos;
 
     var out: VertexOutput;
@@ -91,9 +92,9 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let pix_pos = pix_coord - pix_center;
     let r2: f32 = pix_pos.x * pix_pos.x + pix_pos.y * pix_pos.y;
     if (r2 < 0.10) {
-        return vec4<f32>(0.5, 0.0, 0.3, 1.0);
+        return 0.0 * vec4<f32>(0.5, 0.0, 0.3, 1.0);
     }
-    return tex * 0.2;
+    return tex;
 
     // if (tex[2] < 0.1) {
     //     discard;

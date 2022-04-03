@@ -577,8 +577,10 @@ impl State {
     }
 
     pub fn update(&mut self) {
+
         let now = std::time::Instant::now();
-        let _cube_to_world = self.cube_trackball.orientation(now);
+        let cube_to_world = self.cube_trackball.orientation(now);
+        self.cube.update_transform(&cube_to_world);
         // for fi in &mut self.cube_face_instances {
         //     fi.update_cube_xform(&cube_to_world);
         // }
@@ -643,6 +645,7 @@ impl State {
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
 
             self.cube.render(
+                &self.queue,
                 &mut render_pass,
                 &cube_prepared_data,
             );
