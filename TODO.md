@@ -3,11 +3,12 @@
 ## Bugs
 
  * Is the cube decal texture lifetime okay?
+ * Cube spins too fast at program startup.
 
 ## Cleanup and Organization
 
  * ~~remove dead code.~~
- * FaceInstanceRaw::desc() should use ATTRIBUTES constant.
+ * ~~FaceInstanceRaw::desc() should use ATTRIBUTES constant.~~
  * rename cube.texture to cube.decal.
  * move camera to its own file.
 

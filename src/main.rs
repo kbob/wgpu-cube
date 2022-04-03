@@ -412,6 +412,40 @@ impl State {
     }
 }
 
+struct Stats {
+    frame_count: u32,
+    prev_frame_count: u32,
+    prev_time: std::time::Instant,
+}
+
+impl Stats {
+    fn new() -> Self {
+        Stats {
+            frame_count: 0,
+            prev_frame_count: 0,
+            prev_time: std::time::Instant::now(),
+        }
+    }
+    fn count_frame(&mut self) {
+
+        self.frame_count += 1;
+
+        let now = std::time::Instant::now();
+        let dur = now.duration_since(self.prev_time);
+                if dur.as_secs() > 0 {
+            if self.prev_frame_count != 0 {
+                let n = self.frame_count - self.prev_frame_count;
+                println!(
+                    "{0:.2} frames/second",
+                    n as f64 / dur.as_secs_f64(),
+                );
+            }
+            self.prev_time = now;
+            self.prev_frame_count = self.frame_count;
+            }
+    }
+}
+
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
@@ -420,6 +454,7 @@ fn main() {
         .build(&event_loop)
         .unwrap();
     let mut state = pollster::block_on(State::new(&window));
+    let mut stats = Stats::new();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -467,6 +502,7 @@ fn main() {
                         *control_flow = ControlFlow::Exit,
                     Err(e) => eprintln!("{:?}", e),
                 }
+                stats.count_frame();
             }
 
             Event::MainEventsCleared => {
