@@ -1,19 +1,3 @@
-// Good thoughts:
-//      https://github.com/gfx-rs/wgpu/wiki/Encapsulating-Graphics-Work
-//
-// Bevy's render stages:
-//      Extract
-//      Prepare
-//      Queue
-//      PhaseSort
-//      Render
-//      Cleanup
-// https://docs.rs/bevy/latest/bevy/render/enum.RenderStage.html
-
-// Scopes: uniform, instance, vertex
-// Lifetimes: static, frame, shader, ???
-// Visibility: vertex, fragment, both
-
 use cgmath::prelude::*;
 use wgpu::util::DeviceExt;
 
@@ -40,22 +24,6 @@ struct CubeUniformRaw {
     _padding: [u32; 3],
 }
 
-// impl CubeUniformRaw {
-//     fn new() -> Self {
-//         assert!(std::mem::size_of::<Self>() == 80);
-//         Self {
-//             cube_to_world: [
-//                 [1.0, 0.0, 0.0, 0.0],
-//                 [0.0, 1.0, 0.0, 0.0],
-//                 [0.0, 0.0, 1.0, 0.0],
-//                 [0.0, 0.0, 0.0, 1.0],
-//             ],
-//             decal_is_visible: true as u32,
-//             _padding: [0, 0, 0],
-//         }
-//     }
-// }
-
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct FaceStaticInstanceRaw {
@@ -70,7 +38,7 @@ impl FaceStaticInstanceRaw {
             array_stride: size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &[
-                // face_to_cube: 4 x 4 floats
+                // face_to_cube: mat4<f32> declared as four vec4<f32>'s
                 wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 5,
@@ -102,11 +70,6 @@ impl FaceStaticInstanceRaw {
         }
     }
 }
-
-// #[repr(C)]
-// #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-// struct FaceDynamicInstanceRaw {
-// }
 
 pub struct Cube {
 
@@ -141,36 +104,38 @@ impl Cube {
         color_format: wgpu::TextureFormat,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
+
         // create static data here:
-        //      face instance static data
-        //      face vertex data
-        //      face vertex index data
-        //      face texture data
-        //      face vertex buffer
-        //      face vertex index buffer
-        //      face static instance buffer
-        //      face texture:
-        //          texture
-        //          buffer
-        //          texture view
-        //          bind group layout
-        //          bind group
-        //      face shader
-        //      face pipeline layout
-        //      face pipeline
+        //      cube_to_world transform
+        //      cube uniform buffer
+        //      cube uniform bind group
         //
-        //      edge vertex data
-        //      edge vertex index data
+        //      face static instance buffer
+        //          references instance data
+        //      face vertex buffer
+        //          references vertex data
+        //      face vertex index buffer
+        //          references vertex index data
+        //      face texture bind group
+        //          references texture view, sampler
+        //          !!! DOES NOT REFERENCE DATA !!!
+        //      face pipeline
+        //          references shader, bind group layouts, vertex formats
+        //
         //      edge vertex buffer
+        //          references vertex data
         //      edge vertex index buffer
-        //      edge shader
-        //      edge pipeline layout
+        //          references vertex index data
         //      edge pipeline
+        //          references shader, bind group layouts, vertex formats
+
 
         let model = cube_model::CubeModel::new();
 
         let cube_to_world = cgmath::Matrix4::identity();
-        // XXX don't need to init buffer; prepare/render set it up.
+
+        // N.B., the cube uniform buffer is not initialized.
+        // It will be updated before the first render.
         let cube_uniform_buffer = device.create_buffer(
             &wgpu::BufferDescriptor {
                 label: Some("cube_uniform_buffer"),
@@ -181,24 +146,16 @@ impl Cube {
             }
         );
 
-        // let cube_uniform = CubeUniformRaw::new();
-        // let cube_uniform_buffer = device.create_buffer_init(
-        //     &wgpu::util::BufferInitDescriptor {
-        //         label: Some("cube_uniform_buffer"),
-        //         contents: bytemuck::cast_slice(&[cube_uniform]),
-        //         usage: (
-        //             wgpu::BufferUsages::UNIFORM |
-        //             wgpu::BufferUsages::COPY_DST
-        //         ),
-        //     }
-        // );
         let cube_uniform_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
                 label: Some("cube_bind_group"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
+                        visibility: (
+                            wgpu::ShaderStages::VERTEX |
+                            wgpu::ShaderStages::FRAGMENT
+                        ),
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -491,14 +448,3 @@ impl Renderable<CubeAttributes, CubePreparedData> for Cube {
         );
     }
 }
-
-
-// Future Topics
-//  reattach the trackball to the cube
-//  FaceInstanceRaw::desc() should use ATTRIBUTES constant.
-//  rename cube.texture to cube.decal.
-//  floor
-//  mirror
-//  shadow
-//  use push constants
-//  multisampling

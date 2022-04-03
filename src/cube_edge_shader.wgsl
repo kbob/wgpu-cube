@@ -13,7 +13,7 @@ var<uniform> camera: CameraUniform;
 
 struct CubeUniform {
     cube_to_world: mat4x4<f32>;
-    // decal_is_visible: u32;
+    decal_is_visible: u32;
 };
 [[group(1), binding(0)]]
 var<uniform> cube: CubeUniform;
@@ -42,5 +42,4 @@ fn vs_main(
 [[stage(fragment)]]
 fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     return vec4<f32>(0.718, 0.055, 0.0, 1.0);
-    // return vec4<f32>(0.5, 0.2, 0.01, 1.0);
 }

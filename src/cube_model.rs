@@ -92,10 +92,6 @@ impl CubeModel {
             }
         ).collect();
 
-        // let edge_tri_count: usize = models[0].mesh.indices.len() / 3;
-        // let mut _foo: Vec<EdgeVertex> = vec![Default::default(); edge_tri_count];
-        // let mut _bar: Vec<u32> = vec![0; edge_tri_count];
-
         let mut out = Self {
             face_count: FACE_COUNT,
             pixels_per_side: PIXELS_PER_SIDE,
