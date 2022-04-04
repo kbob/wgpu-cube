@@ -1,5 +1,3 @@
-use cgmath::prelude::*;
-use wgpu::util::DeviceExt;
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
@@ -7,6 +5,7 @@ use winit::{
     window::WindowBuilder,
 };
 
+mod camera;
 mod cube;
 mod cube_model;
 mod texture;
@@ -22,7 +21,7 @@ const BACKFACE_CULL: bool = true;
 
 #[allow(dead_code)]
 #[derive(PartialEq)]
-enum Hand {
+pub enum Hand {
     Left,
     Right,
 }
@@ -31,70 +30,6 @@ const WORLD_HANDEDNESS: Hand = Hand::Right;
 const BACKGROUND_COLOR: wgpu::Color = wgpu::Color {
     r: 0.00250, g: 0.00625, b: 0.01500, a: 1.0,
 };
-
-#[rustfmt::skip]
-pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
-    1.0,  0.0,  0.0,  0.0,
-    0.0,  1.0,  0.0,  0.0,
-    0.0,  0.0, -0.5,  0.0,
-    0.0,  0.0,  0.5,  1.0,
-);
-#[rustfmt::skip]
-pub const LEFT_HAND_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
-    1.0,  0.0,  0.0,  0.0,
-    0.0,  1.0,  0.0,  0.0,
-    0.0,  0.0,  0.5,  0.0,
-    0.0,  0.0,  0.5,  1.0,
-);
-
-struct Camera {
-    eye: cgmath::Point3<f32>,
-    target: cgmath::Point3<f32>,
-    up: cgmath::Vector3<f32>,
-    aspect: f32,
-    fovy: f32,
-    znear: f32,
-    zfar: f32,
-}
-
-impl Camera {
-    fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
-        let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
-        let proj = cgmath::perspective(
-            cgmath::Deg(self.fovy),
-            self.aspect,
-            self.znear,
-            self.zfar,
-        );
-        let convert = match WORLD_HANDEDNESS {
-            Hand::Left => LEFT_HAND_TO_WGPU_MATRIX,
-            Hand::Right => OPENGL_TO_WGPU_MATRIX,
-        };
-        convert * proj * view
-    }
-
-    fn configure(&mut self, config: &wgpu::SurfaceConfiguration) {
-        self.aspect = config.width as f32 / config.height as f32;
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct CameraUniform {
-    view_proj: [[f32; 4]; 4],
-}
-
-impl CameraUniform {
-    fn new() -> Self {
-        Self {
-            view_proj: cgmath::Matrix4::identity().into(),
-        }
-    }
-
-    fn update_view_proj(&mut self, camera: &Camera) {
-        self.view_proj = camera.build_view_projection_matrix().into();
-    }
-}
 
 fn create_render_pipeline(
     label: &str,
@@ -171,11 +106,8 @@ struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     depth_texture: texture::Texture,
-    camera: Camera,
-    camera_uniform: CameraUniform,
-    _camera_buffer: wgpu::Buffer,
-    camera_bind_group: wgpu::BindGroup,
-    cube: cube::Cube,
+    camera: camera::Camera,     // Buffalo Buffalo buffalo...
+    cube: cube::Cube,           // ... buffalo buffalo Buffalo...
     cube_trackball: trackball::Trackball,
 }
 
@@ -216,59 +148,11 @@ impl State {
 
         // Camera
 
-        let camera = Camera {
-            eye: (100.0, 150.0, 300.0).into(),
-            target: (60.0, 0.0, 0.0).into(),
-            up: cgmath::Vector3::unit_y(),
-            aspect: config.width as f32 / config.height as f32,
-            fovy: 45.0,
-            znear: 1.0,
-            zfar: 1000.0,
-        };
-
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
-
-        let _camera_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("_camera_buffer"),
-                contents: bytemuck::cast_slice(&[camera_uniform]),
-                usage: (
-                    wgpu::BufferUsages::UNIFORM |
-                    wgpu::BufferUsages::COPY_DST
-                ),
-            }
-        );
-
-        let camera_bind_group_layout = device.create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor {
-                label: Some("camera_bind_group_layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
-            }
-        );
-
-        let camera_bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                label: Some("camera_bind_group"),
-                layout: &camera_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: _camera_buffer.as_entire_binding(),
-                    }
-                ],
-            }
+        let camera = camera::Camera::new(
+            &device,
+            size.width,
+            size.height,
+            WORLD_HANDEDNESS,
         );
 
         // Cube Object
@@ -277,7 +161,7 @@ impl State {
             &device,
             &queue,
             config.format,
-            &camera_bind_group_layout,
+            &camera.get_bind_group_layout(),
         );
 
         let cube_trackball = trackball::Trackball::new(&size);
@@ -304,9 +188,6 @@ impl State {
             config,
             depth_texture,
             camera,
-            camera_uniform,
-            _camera_buffer,
-            camera_bind_group,
             cube,
             cube_trackball,
         }
@@ -318,13 +199,7 @@ impl State {
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
-            self.camera.configure(&self.config);
-            self.camera_uniform.update_view_proj(&self.camera);
-            self.queue.write_buffer(
-                &self._camera_buffer,
-                0,
-                bytemuck::cast_slice(&[self.camera_uniform]),
-            );
+            self.camera.set_aspect(self.config.width, self.config.height);
             self.depth_texture = texture::Texture::create_depth_texture(
                 "depth_texture",
                 &self.device,
@@ -367,6 +242,9 @@ impl State {
         let cube_prepared_data = self.cube.prepare(
             &cube::CubeAttributes {}
         );
+        let camera_prepared_data = self.camera.prepare(
+            &camera::CameraAttributes {}
+        );
         
         {
             let mut render_pass = encoder.begin_render_pass(
@@ -397,7 +275,12 @@ impl State {
                 },
             );
 
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            // render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            self.camera.render(
+                &self.queue,
+                &mut render_pass,
+                &camera_prepared_data,
+            );
 
             self.cube.render(
                 &self.queue,
