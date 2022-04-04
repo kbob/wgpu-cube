@@ -3,18 +3,7 @@ use wgpu::util::DeviceExt;
 
 use crate::cube_model;
 use crate::texture;
-
-pub trait Renderable<Attributes, PreparedData> {
-
-    fn prepare(&self, _: &Attributes) -> PreparedData;
-
-    fn render<'rpass>(
-        &'rpass self,
-        _: &wgpu::Queue,
-        _: &mut wgpu::RenderPass<'rpass>,
-        _: &'rpass PreparedData,
-    );
-}
+use crate::traits::Renderable;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]

@@ -10,8 +10,9 @@ use winit::{
 mod cube;
 mod cube_model;
 mod texture;
+mod traits;
 mod trackball;
-use cube::Renderable;
+use traits::Renderable;
 use trackball::{
     Manipulable,
     Responder,
