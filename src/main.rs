@@ -8,6 +8,7 @@ use winit::{
 mod camera;
 mod cube;
 mod cube_model;
+mod test_pattern;
 mod texture;
 mod traits;
 mod trackball;
@@ -106,9 +107,12 @@ struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     depth_texture: texture::Texture,
-    camera: camera::Camera,     // Buffalo Buffalo buffalo...
-    cube: cube::Cube,           // ... buffalo buffalo Buffalo...
+    camera: camera::Camera,     // Buffalo buffalo Buffalo...
+    cube: cube::Cube,           // ... buffalo buffalo buffalo...
     cube_trackball: trackball::Trackball,
+    test_pattern: test_pattern::TestPattern,
+    blinky_texture: wgpu::Texture,
+    blinky_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -155,6 +159,90 @@ impl State {
             WORLD_HANDEDNESS,
         );
 
+        // Blinky
+
+        let test_pattern = test_pattern::TestPattern::new();
+        let blinky_texture = device.create_texture(
+            &wgpu::TextureDescriptor {
+                label: Some("blinky_texture"),
+                size: wgpu::Extent3d {
+                    width: 6 * 64,
+                    height: 64,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Uint,
+                usage: (
+                    wgpu::TextureUsages::TEXTURE_BINDING |
+                    wgpu::TextureUsages::COPY_DST
+                )
+            }
+        );
+        let blinky_texture_view = blinky_texture.create_view(
+            &wgpu::TextureViewDescriptor::default()
+        );
+        let blinky_texture_sampler = device.create_sampler(
+            &wgpu::SamplerDescriptor {
+                label: Some("blinky_sampler"),
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::FilterMode::Linear,
+                lod_min_clamp: -100.0,
+                lod_max_clamp: 100.0,
+                ..Default::default()
+            }
+        );
+        let blinky_bind_group_layout = device.create_bind_group_layout(
+            &wgpu::BindGroupLayoutDescriptor {
+                label: Some("blinky_bind_group_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Uint,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(
+                            wgpu::SamplerBindingType::Filtering,
+                        ),
+                        count: None,
+                    },
+                ],
+            }
+        );
+        let blinky_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                label: Some("blinky_bind_group"),
+                layout: &blinky_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(
+                            &blinky_texture_view,
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(
+                            &blinky_texture_sampler,
+                        ),
+                    }
+                ],
+            }
+        );
+
         // Cube Object
 
         let cube = cube::Cube::_new(
@@ -162,11 +250,12 @@ impl State {
             &queue,
             config.format,
             &camera.get_bind_group_layout(),
+            &blinky_bind_group_layout,
         );
 
         let cube_trackball = trackball::Trackball::new(&size);
 
-        // Pipeline
+        // Depth Texture
 
         let depth_texture = texture::Texture::create_depth_texture(
             "depth_texture",
@@ -190,6 +279,9 @@ impl State {
             camera,
             cube,
             cube_trackball,
+            test_pattern,
+            blinky_texture,
+            blinky_bind_group,
         }
     }
 
@@ -262,7 +354,7 @@ impl State {
                     ],
                     depth_stencil_attachment: Some(
                         wgpu::RenderPassDepthStencilAttachment {
-                            view: & self.depth_texture.view,
+                            view: &self.depth_texture.view,
                             depth_ops: Some(
                                 wgpu::Operations {
                                     load: wgpu::LoadOp::Clear(z_far),
@@ -275,13 +367,32 @@ impl State {
                 },
             );
 
-            // render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            self.queue.write_texture(
+                self.blinky_texture.as_image_copy(),
+                self.test_pattern.next_frame(),
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: std::num::NonZeroU32::new(6 * 64 * 4),
+                    rows_per_image: None,
+                },
+                wgpu::Extent3d {
+                    width: 6 * 64,
+                    height: 64,
+                    depth_or_array_layers: 1,
+                },
+            );
+
+            // Bind Groups
+            //  0.  Camera Uniform
+            //  1.  Blinky Texture
+            //  2.  Cube Uniform
+            //  3.  Cube Decal Texture
             self.camera.render(
                 &self.queue,
                 &mut render_pass,
                 &camera_prepared_data,
             );
-
+            render_pass.set_bind_group(1, &self.blinky_bind_group, &[]);
             self.cube.render(
                 &self.queue,
                 &mut render_pass,
@@ -316,7 +427,7 @@ impl Stats {
 
         let now = std::time::Instant::now();
         let dur = now.duration_since(self.prev_time);
-                if dur.as_secs() > 0 {
+        if dur.as_secs() >= 1 {
             if self.prev_frame_count != 0 {
                 let n = self.frame_count - self.prev_frame_count;
                 println!(
@@ -326,15 +437,17 @@ impl Stats {
             }
             self.prev_time = now;
             self.prev_frame_count = self.frame_count;
-            }
+        }
     }
 }
 
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
+    let ph = winit::dpi::PhysicalSize::new(1920, 1080);
     let window = WindowBuilder::new()
         .with_title("Hello WGPU")
+        .with_inner_size(winit::dpi::Size::Physical(ph))
         .build(&event_loop)
         .unwrap();
     let mut state = pollster::block_on(State::new(&window));

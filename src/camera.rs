@@ -92,7 +92,8 @@ impl Camera {
         );
 
         Self {
-            eye: (100.0, 150.0, 300.0).into(),
+            // hardcoded position, oh my!
+            eye: (100.0, 150.0, 200.0).into(),
             target: (60.0, 0.0, 0.0).into(),
             up: cgmath::Vector3::unit_y(),
             aspect: width as f32 / height as f32,
@@ -136,8 +137,7 @@ pub struct CameraPreparedData {
 }
 
 impl Renderable<CameraAttributes, CameraPreparedData> for Camera {
-    fn prepare(&self, _: &CameraAttributes) -> CameraPreparedData
-    {
+    fn prepare(&self, _: &CameraAttributes) -> CameraPreparedData {
         return CameraPreparedData {
             camera_uniform: CameraUniformRaw {
                 view_proj: self.build_view_projection_matrix().into(),

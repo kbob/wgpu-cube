@@ -54,7 +54,8 @@ impl Trackball {
             cur_xform: Matrix4::<f32>::identity(),
             first_xform: Matrix4::<f32>::identity(),
             axis: Vector3::<f32>::unit_y(),
-            velocity: Rad::<f32>(0.01),
+            // velocity: Rad::<f32>(0.01),
+            velocity: Rad::<f32>(std::f32::consts::PI / 256.0),
 
             mouse_state: ElementState::Released,
             viewport_size: *viewport_size,

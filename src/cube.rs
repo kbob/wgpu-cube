@@ -71,6 +71,7 @@ impl Cube {
         queue: &wgpu::Queue,
         color_format: wgpu::TextureFormat,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
+        blinky_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
 
         // create static data here:
@@ -221,8 +222,8 @@ impl Cube {
             ).unwrap();
             device.create_bind_group(
                 &wgpu::BindGroupDescriptor {
-                    layout: &face_decal_bind_group_layout,
                     label: Some("face_decal_bind_group"),
+                    layout: &face_decal_bind_group_layout,
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
@@ -247,6 +248,7 @@ impl Cube {
                     label: Some("face_pipeline_layout"),
                     bind_group_layouts: &[
                         &camera_bind_group_layout,
+                        &blinky_bind_group_layout,
                         &cube_uniform_bind_group_layout,
                         &face_decal_bind_group_layout,
                     ],
@@ -296,7 +298,9 @@ impl Cube {
                     label: Some("edge_pipeline_layout"),
                     bind_group_layouts: &[
                         &camera_bind_group_layout,
+                        &blinky_bind_group_layout,
                         &cube_uniform_bind_group_layout,
+                        &face_decal_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
                 }
@@ -383,10 +387,11 @@ impl Renderable<CubeAttributes, CubePreparedData> for Cube {
         // Render Faces
 
         render_pass.set_pipeline(&self.face_pipeline);
-        // Camera bind group is set elsewhere.
+        // Camera bind group and blinky texture are set elsewhere.
         // render_pass.set_bind_group(0, &camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.cube_uniform_bind_group, &[]);
-        render_pass.set_bind_group(2, &self.face_decal_bind_group, &[]);
+        // render_pass.set_bind_group(1, &blinky_bind_group, &[]);
+        render_pass.set_bind_group(2, &self.cube_uniform_bind_group, &[]);
+        render_pass.set_bind_group(3, &self.face_decal_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.face_vertex_buffer.slice(..));
         render_pass.set_vertex_buffer(1, self.face_instance_buffer.slice(..));
         render_pass.set_index_buffer(

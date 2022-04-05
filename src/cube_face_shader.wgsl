@@ -10,7 +10,7 @@ struct CubeUniform {
     cube_to_world: mat4x4<f32>;
     decal_is_visible: u32;
 };
-[[group(1), binding(0)]]
+[[group(2), binding(0)]]
 var<uniform> cube: CubeUniform;
 
 struct InstanceStaticInput {
@@ -59,9 +59,14 @@ fn vs_main(
 
 // Fragment shader
 
-[[group(2), binding(0)]]
+[[group(1), binding(0)]]
+var t_blinky: texture_2d<u32>;
+[[group(1), binding(1)]]
+var s_blinky: sampler;
+
+[[group(3), binding(0)]]
 var t_decal: texture_2d<f32>;
-[[group(2), binding(1)]]
+[[group(3), binding(1)]]
 var s_decal: sampler;
 
 [[stage(fragment)]]
@@ -79,8 +84,13 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     }
     let pix_pos = pix_coord - pix_center;
     let r2: f32 = pix_pos.x * pix_pos.x + pix_pos.y * pix_pos.y;
+    let pix_index = vec2<i32>(pix_center);
+    // let blinky_color = textureSample(t_blinky, s_blinky, decal_index);
+    let blinky_colorx = textureLoad(t_blinky, pix_index, 0);
+    let blinky_color = vec4<f32>(blinky_colorx);
     if (r2 < 0.10) {
-        return 0.0 * vec4<f32>(0.5, 0.0, 0.3, 1.0);
+        return blinky_color;
+        // return vec4<f32>(0.5, 0.0, 0.3, 1.0);
     }
-    return face_color;
+    return 0.1 * face_color;
 }
