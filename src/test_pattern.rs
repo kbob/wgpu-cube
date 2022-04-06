@@ -39,7 +39,7 @@ impl TestPattern {
 
     fn write_row_column(&mut self, frame_number: usize, value: u8) {
         const HORIZ_CHANNEL: [usize; FACES] = [2, 0, 2, 2, 1, 2];
-        const VERT_CHANNEL: [usize; FACES] = [1, 1, 1, 0, 0, 1];
+        const VERT_CHANNEL: [usize; FACES] = [1, 1, 1, 0, 0, 0];
         const HALF_SIDE: usize = SIDE / 2;
 
         let pos = frame_number % HALF_SIDE;
@@ -51,21 +51,21 @@ impl TestPattern {
         const BPP: usize = CHANNELS;        // 4 bytes per pixel
         const BPFR: usize = SIDE * BPP;     // 64 pixels per face row
         const BPCR: usize = FACES * BPFR;   // 6 face rows per row
-        fn index_4d(row: usize, face: usize, col: usize, chan: usize) -> usize {
-            BPCR * row + BPFR * face + BPP * col + chan
+        fn index_4d(face: usize, row: usize, col: usize, chan: usize) -> usize {
+            BPCR * row + BPFR * (FACES - face - 1) + BPP * col + chan
         }
         for face in 0..FACES {
             for i in 0..SIDE {
 
                 // Horizontal stripes
-                self.data[index_4d(i, face, rc0, HORIZ_CHANNEL[face])] = value;
-                self.data[index_4d(i, face, rc1, HORIZ_CHANNEL[face])] = value;
+                self.data[index_4d(face, i, rc0, HORIZ_CHANNEL[face])] = value;
+                self.data[index_4d(face, i, rc1, HORIZ_CHANNEL[face])] = value;
                 // self.data[i][face_offset + rc0][HORIZ_CHANNEL[face]] = value;
                 // self.data[i][face_offset + rc1][HORIZ_CHANNEL[face]] = value;
 
                 // Vertical stripes
-                self.data[index_4d(rc0, face, i, VERT_CHANNEL[face])] = value;
-                self.data[index_4d(rc1, face, i, VERT_CHANNEL[face])] = value;
+                self.data[index_4d(face, rc0, i, VERT_CHANNEL[face])] = value;
+                self.data[index_4d(face, rc1, i, VERT_CHANNEL[face])] = value;
                 // self.data[rc0][face_offset + i][VERT_CHANNEL[face]] = value;
                 // self.data[rc1][face_offset + i][VERT_CHANNEL[face]] = value;
             }

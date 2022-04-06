@@ -367,20 +367,22 @@ impl State {
                 },
             );
 
-            self.queue.write_texture(
-                self.blinky_texture.as_image_copy(),
-                self.test_pattern.next_frame(),
-                wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: std::num::NonZeroU32::new(6 * 64 * 4),
-                    rows_per_image: None,
-                },
-                wgpu::Extent3d {
-                    width: 6 * 64,
-                    height: 64,
-                    depth_or_array_layers: 1,
-                },
-            );
+            if true {
+                self.queue.write_texture(
+                    self.blinky_texture.as_image_copy(),
+                    self.test_pattern.next_frame(),
+                    wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: std::num::NonZeroU32::new(6 * 64 * 4),
+                        rows_per_image: None,
+                    },
+                    wgpu::Extent3d {
+                        width: 6 * 64,
+                        height: 64,
+                        depth_or_array_layers: 1,
+                    },
+                );
+            }
 
             // Bind Groups
             //  0.  Camera Uniform
@@ -411,14 +413,17 @@ struct Stats {
     frame_count: u32,
     prev_frame_count: u32,
     prev_time: std::time::Instant,
+    last_frame_time: std::time::Instant,
 }
 
 impl Stats {
     fn new() -> Self {
+        let now = std::time::Instant::now();
         Stats {
             frame_count: 0,
             prev_frame_count: 0,
-            prev_time: std::time::Instant::now(),
+            prev_time: now,
+            last_frame_time: now,
         }
     }
     fn count_frame(&mut self) {
@@ -438,6 +443,7 @@ impl Stats {
             self.prev_time = now;
             self.prev_frame_count = self.frame_count;
         }
+        self.last_frame_time = now;
     }
 }
 
@@ -468,7 +474,8 @@ fn main() {
                             input:
                                 KeyboardInput {
                                     state: ElementState::Pressed,
-                                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                                    virtual_keycode:
+                                        Some(VirtualKeyCode::Escape),
                                     ..
                                 },
                             ..

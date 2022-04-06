@@ -92,5 +92,5 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
         return blinky_color;
         // return vec4<f32>(0.5, 0.0, 0.3, 1.0);
     }
-    return 0.1 * face_color;
+    return face_color ;// * 0.01;
 }

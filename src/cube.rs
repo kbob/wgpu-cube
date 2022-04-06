@@ -284,7 +284,6 @@ impl Cube {
             }
         );
         let edge_vertex_index_count = model.edge_indices.len() as u32;
-        println!("edge_vertex_index_count = {:?}", edge_vertex_index_count);
         let edge_vertex_index_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("edge_vertex_index_buffer"),
