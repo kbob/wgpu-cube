@@ -85,12 +85,10 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let pix_pos = pix_coord - pix_center;
     let r2: f32 = pix_pos.x * pix_pos.x + pix_pos.y * pix_pos.y;
     let pix_index = vec2<i32>(pix_center);
-    // let blinky_color = textureSample(t_blinky, s_blinky, decal_index);
     let blinky_colorx = textureLoad(t_blinky, pix_index, 0);
     let blinky_color = vec4<f32>(blinky_colorx);
     if (r2 < 0.10) {
         return blinky_color;
-        // return vec4<f32>(0.5, 0.0, 0.3, 1.0);
     }
     return face_color ;// * 0.01;
 }
