@@ -19,6 +19,7 @@ use trackball::{
 };
 
 const BACKFACE_CULL: bool = true;
+const ALPHA_BLENDING: bool = false;
 
 #[allow(dead_code)]
 #[derive(PartialEq)]
@@ -87,10 +88,12 @@ fn create_render_pipeline(
                 targets: &[
                     wgpu::ColorTargetState {
                         format: color_format,
-                        blend: Some(wgpu::BlendState {
-                            alpha: wgpu::BlendComponent::REPLACE,
-                            color: wgpu::BlendComponent::REPLACE,
-                        }),
+                        blend: Some(
+                            match ALPHA_BLENDING {
+                                true => wgpu::BlendState::ALPHA_BLENDING,
+                                false => wgpu::BlendState::REPLACE,
+                            }
+                        ),
                         write_mask: wgpu::ColorWrites::ALL,
                     },
                 ],
