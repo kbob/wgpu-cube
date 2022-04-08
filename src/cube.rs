@@ -9,7 +9,7 @@ use crate::traits::Renderable;
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct CubeUniformRaw {
     cube_to_world: [[f32; 4]; 4],
-    decal_is_visible: u32,
+    decal_visibility: f32,
     _padding: [u32; 3],
 }
 
@@ -213,7 +213,7 @@ impl Cube {
             }
         );
         let face_decal_bind_group = {
-            let decal_bytes = include_bytes!("DIN_digits_linear.png");
+            let decal_bytes = include_bytes!("DIN_digits_aliased.png");
             let decal_texture = texture::Texture::from_bytes(
                 &device,
                 &queue,
@@ -349,21 +349,28 @@ impl Cube {
 }
 
 pub struct CubePreparedData {
-    // store any data that is submitted per-frame here.
     cube_uniform: CubeUniformRaw,
-    // is this where the video goes?
 }
 
-pub struct CubeAttributes {}
+pub struct CubeAttributes {
+    pub frame_time: f32,
+}
 
 impl Renderable<CubeAttributes, CubePreparedData> for Cube {
 
-    fn prepare(&self, _attr: &CubeAttributes) -> CubePreparedData
+    fn prepare(&self, attr: &CubeAttributes) -> CubePreparedData
     {
+        let phase = attr.frame_time as i32 % 2;
+        let frac = attr.frame_time % 1.0;
+        let brightness = if phase == 0 {
+            frac * frac
+        } else {
+            (1.0 - frac) * (1.0 - frac)
+        };
         CubePreparedData {
             cube_uniform: CubeUniformRaw {
                 cube_to_world: self.cube_to_world.into(),
-                decal_is_visible: true as u32,
+                decal_visibility: brightness,
                 _padding: [0, 0, 0],
             },
         }

@@ -8,7 +8,7 @@ var<uniform> camera: CameraUniform;
 
 struct CubeUniform {
     cube_to_world: mat4x4<f32>;
-    decal_is_visible: u32;
+    decal_visibility: f32;
 };
 [[group(2), binding(0)]]
 var<uniform> cube: CubeUniform;
@@ -69,26 +69,28 @@ var t_decal: texture_2d<f32>;
 [[group(3), binding(1)]]
 var s_decal: sampler;
 
+let face_base_color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+let led_base_color: vec4<f32> = vec4<f32>(0.04, 0.04, 0.04, 1.0);
+let led_r2: f32 = 0.10;
+
 [[stage(fragment)]]
 fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     // 0 <= x <= 6; 0 <= y <= 1
     let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
-    let pixel_scale: f32 = 64.0;
     let pix_coord = t_coord * 64.0;
     let pix_center = round(pix_coord);
-    let decal_index = pix_center / vec2<f32>(64.0 * 6.0, 64.0);
-    var face_color = vec4<f32>(0.020, 0.020, 0.025, 1.0);
-    if (cube.decal_is_visible != 0u) {
-        let decal_color = textureSample(t_decal, s_decal, decal_index);
-        face_color = max(face_color, decal_color);
-    }
+    let tex_index = vec2<i32>(pix_center);
+
+    let decal_color = vec4<f32>(textureLoad(t_decal, tex_index, 0));
+    let blinky_color = vec4<f32>(textureLoad(t_blinky, tex_index, 0)) / 255.0;
+    let face_color = max(face_base_color, cube.decal_visibility * decal_color);
+    var led_color = max(led_base_color, blinky_color);
+
     let pix_pos = pix_coord - pix_center;
-    let r2: f32 = pix_pos.x * pix_pos.x + pix_pos.y * pix_pos.y;
-    let pix_index = vec2<i32>(pix_center);
-    let blinky_colorx = textureLoad(t_blinky, pix_index, 0);
-    let blinky_color = vec4<f32>(blinky_colorx);
-    if (r2 < 0.10) {
-        return blinky_color;
+    let pix_r2: f32 = pix_pos.x * pix_pos.x + pix_pos.y * pix_pos.y;
+    if (pix_r2 < led_r2) {
+        return led_color;
+    } else {
+        return face_color;
     }
-    return face_color ;// * 0.01;
 }

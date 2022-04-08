@@ -116,6 +116,7 @@ struct State {
     test_pattern: test_pattern::TestPattern,
     blinky_texture: wgpu::Texture,
     blinky_bind_group: wgpu::BindGroup,
+    first_frame_time: Option<std::time::Instant>,
 }
 
 impl State {
@@ -269,6 +270,7 @@ impl State {
                 Hand::Right => wgpu::CompareFunction::GreaterEqual,
             },
         );
+        let first_frame_time = None;
 
         // Results
 
@@ -285,6 +287,7 @@ impl State {
             test_pattern,
             blinky_texture,
             blinky_bind_group,
+            first_frame_time,
         }
     }
 
@@ -335,7 +338,13 @@ impl State {
         );
 
         let cube_prepared_data = self.cube.prepare(
-            &cube::CubeAttributes {}
+            &cube::CubeAttributes {
+                frame_time:
+                    self.first_frame_time
+                        .get_or_insert_with(|| std::time::Instant::now())
+                        .elapsed()
+                        .as_secs_f32(),
+            }
         );
         let camera_prepared_data = self.camera.prepare(
             &camera::CameraAttributes {}

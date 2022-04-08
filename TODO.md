@@ -14,11 +14,11 @@
  * ~~move camera to its own file.~~
  * need a way to keep track of bind groups.
  * move most of the event handling out of main.rs?
- * convert trackball to use a quaternion instead of a matrix.
+ * ~~convert trackball to use a quaternion instead of a matrix.~~
 
 ## Features
 
- * give the trackball momentum.
+ * ~~give the trackball momentum.~~
  * set trackball center at cube's center.
  * add lighting.
  * implement LED animation.
