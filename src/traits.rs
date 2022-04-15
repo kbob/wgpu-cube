@@ -1,5 +1,4 @@
 pub trait Renderable<Attributes, PreparedData> {
-
     fn prepare(&self, _: &Attributes) -> PreparedData;
 
     fn render<'rpass>(

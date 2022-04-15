@@ -56,18 +56,13 @@ impl TestPattern {
         }
         for face in 0..FACES {
             for i in 0..SIDE {
-
                 // Horizontal stripes
                 self.data[index_4d(face, i, rc0, HORIZ_CHANNEL[face])] = value;
                 self.data[index_4d(face, i, rc1, HORIZ_CHANNEL[face])] = value;
-                // self.data[i][face_offset + rc0][HORIZ_CHANNEL[face]] = value;
-                // self.data[i][face_offset + rc1][HORIZ_CHANNEL[face]] = value;
 
                 // Vertical stripes
                 self.data[index_4d(face, rc0, i, VERT_CHANNEL[face])] = value;
                 self.data[index_4d(face, rc1, i, VERT_CHANNEL[face])] = value;
-                // self.data[rc0][face_offset + i][VERT_CHANNEL[face]] = value;
-                // self.data[rc1][face_offset + i][VERT_CHANNEL[face]] = value;
             }
         }
     }
