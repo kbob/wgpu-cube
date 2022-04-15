@@ -27,3 +27,11 @@
  * add a mirror.
  * put smudges or patina on the mirror.
  * use multisampling.
+
+## Lighting Strategy
+
+ * decide how to allocate bind groups.
+ * define lights and pass them through to the shaders.
+ * add Burley diffuse lighting to edge shader.
+ * brute force a shadow map.
+ * refactor shadow map.

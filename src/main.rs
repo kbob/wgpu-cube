@@ -8,6 +8,7 @@ use winit::{
 mod camera;
 mod cube;
 mod cube_model;
+mod lights;
 mod test_pattern;
 mod texture;
 mod traits;
@@ -136,11 +137,18 @@ impl State {
             },
         ).await.unwrap();
 
+        // ensure textures big enough for full screen MSAA.
+        let device_limits = wgpu::Limits {
+            max_bind_groups: 8,
+            ..wgpu::Limits::default().using_resolution(adapter.limits())
+        };
+
         let (device, queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
                 label: Some("device"),
                 features: wgpu::Features::empty(),
-                limits: wgpu::Limits::default(),
+                // limits: wgpu::Limits::default(),
+                limits: device_limits,
             },
             None,
         ).await.unwrap();
