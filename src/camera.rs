@@ -36,8 +36,6 @@ pub struct Camera {
     world_hand: Hand,
 
     pub uniform_buffer: wgpu::Buffer,
-    // bind_group_layout: wgpu::BindGroupLayout,
-    // bind_group: wgpu::BindGroup,
 }
 
 impl Camera {
@@ -60,36 +58,6 @@ impl Camera {
                 ),
             }
         );
-        // let bind_group_layout = device.create_bind_group_layout(
-        //     &wgpu::BindGroupLayoutDescriptor {
-        //         label: Some("camera_bind_group_layout"),
-        //         entries: &[
-        //             wgpu::BindGroupLayoutEntry {
-        //                 binding: 0,
-        //                 visibility: wgpu::ShaderStages::VERTEX,
-        //                 ty: wgpu::BindingType::Buffer {
-        //                     ty: wgpu::BufferBindingType::Uniform,
-        //                     has_dynamic_offset: false,
-        //                     min_binding_size: None,
-        //                 },
-        //                 count: None,
-        //             },
-        //         ],
-        //     }
-        // );
-
-        // let bind_group = device.create_bind_group(
-        //     &wgpu::BindGroupDescriptor {
-        //         label: Some("camera_bind_group"),
-        //         layout: &bind_group_layout,
-        //         entries: &[
-        //             wgpu::BindGroupEntry {
-        //                 binding: 0,
-        //                 resource: uniform_buffer.as_entire_binding(),
-        //             }
-        //         ],
-        //     }
-        // );
 
         Self {
             // hardcoded position, oh my!
@@ -102,17 +70,11 @@ impl Camera {
             zfar: 1000.0,
             world_hand: world_hand,
             uniform_buffer,
-            // bind_group_layout,
-            // bind_group,
         }
     }
     pub fn set_aspect(&mut self, width: u32, height: u32) {
         self.aspect = width as f32 / height as f32;
     }
-
-    // pub fn get_bind_group_layout<'a>(&self) -> &wgpu::BindGroupLayout {
-    //     &self.bind_group_layout
-    // }
 
     fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
@@ -156,6 +118,5 @@ impl Renderable<CameraAttributes, CameraPreparedData> for Camera {
             0,
             bytemuck::cast_slice(&[prepared.camera_uniform]),
         );
-        // render_pass.set_bind_group(0, &self.bind_group, &[]);
     }
 }

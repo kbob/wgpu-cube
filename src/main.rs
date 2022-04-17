@@ -32,7 +32,7 @@ pub enum Hand {
 const WORLD_HANDEDNESS: Hand = Hand::Right;
 
 const BACKGROUND_COLOR: wgpu::Color = wgpu::Color {
-    r: 0.00250, g: 0.00625, b: 0.01500 , a: 1.0,
+    r: 0.00250, g: 0.00625, b: 0.01500, a: 1.0,
 };
 
 fn create_render_pipeline(
@@ -117,7 +117,6 @@ struct State {
     cube_trackball: trackball::Trackball,
     test_pattern: test_pattern::TestPattern,
     blinky_texture: wgpu::Texture,
-    // blinky_bind_group: wgpu::BindGroup,
     cube_face_pipeline: wgpu::RenderPipeline,
     cube_edge_pipeline: wgpu::RenderPipeline,
     static_bind_group: wgpu::BindGroup,
@@ -144,7 +143,6 @@ impl State {
 
         // ensure textures big enough for full screen MSAA.
         let device_limits = wgpu::Limits {
-            // max_bind_groups: 8,
             ..wgpu::Limits::default().using_resolution(adapter.limits())
         };
 
@@ -152,7 +150,6 @@ impl State {
             &wgpu::DeviceDescriptor {
                 label: Some("device"),
                 features: wgpu::Features::empty(),
-                // limits: wgpu::Limits::default(),
                 limits: device_limits,
             },
             None,
@@ -200,75 +197,10 @@ impl State {
         let blinky_texture_view = blinky_texture.create_view(
             &wgpu::TextureViewDescriptor::default()
         );
-        // let blinky_texture_sampler = device.create_sampler(
-        //     &wgpu::SamplerDescriptor {
-        //         label: Some("blinky_sampler"),
-        //         address_mode_u: wgpu::AddressMode::ClampToEdge,
-        //         address_mode_v: wgpu::AddressMode::ClampToEdge,
-        //         address_mode_w: wgpu::AddressMode::ClampToEdge,
-        //         mag_filter: wgpu::FilterMode::Nearest,
-        //         min_filter: wgpu::FilterMode::Linear,
-        //         mipmap_filter: wgpu::FilterMode::Linear,
-        //         lod_min_clamp: -100.0,
-        //         lod_max_clamp: 100.0,
-        //         ..Default::default()
-        //     }
-        // );
-        // let blinky_bind_group_layout = device.create_bind_group_layout(
-        //     &wgpu::BindGroupLayoutDescriptor {
-        //         label: Some("blinky_bind_group_layout"),
-        //         entries: &[
-        //             wgpu::BindGroupLayoutEntry {
-        //                 binding: 0,
-        //                 visibility: wgpu::ShaderStages::FRAGMENT,
-        //                 ty: wgpu::BindingType::Texture {
-        //                     multisampled: false,
-        //                     view_dimension: wgpu::TextureViewDimension::D2,
-        //                     sample_type: wgpu::TextureSampleType::Uint,
-        //                 },
-        //                 count: None,
-        //             },
-        //             // wgpu::BindGroupLayoutEntry {
-        //             //     binding: 1,
-        //             //     visibility: wgpu::ShaderStages::FRAGMENT,
-        //             //     ty: wgpu::BindingType::Sampler(
-        //             //         wgpu::SamplerBindingType::Filtering,
-        //             //     ),
-        //             //     count: None,
-        //             // },
-        //         ],
-        //     }
-        // );
-        // let blinky_bind_group = device.create_bind_group(
-        //     &wgpu::BindGroupDescriptor {
-        //         label: Some("blinky_bind_group"),
-        //         layout: &blinky_bind_group_layout,
-        //         entries: &[
-        //             wgpu::BindGroupEntry {
-        //                 binding: 0,
-        //                 resource: wgpu::BindingResource::TextureView(
-        //                     &blinky_texture_view,
-        //                 ),
-        //             },
-        //             // wgpu::BindGroupEntry {
-        //             //     binding: 1,
-        //             //     resource: wgpu::BindingResource::Sampler(
-        //             //         &blinky_texture_sampler,
-        //             //     ),
-        //             // },
-        //         ],
-        //     }
-        // );
 
         // Cube Object
 
-        let cube = cube::Cube::new(
-            &device,
-            &queue,
-            // config.format,
-            // &camera.get_bind_group_layout(),
-            // &blinky_bind_group_layout,
-        );
+        let cube = cube::Cube::new(&device, &queue);
 
         let cube_trackball = trackball::Trackball::new(&size);
 
@@ -306,10 +238,6 @@ impl State {
                     bind_group_layouts: &[
                         &static_bindings.layout,
                         &frame_bindings.layout,
-                        // &camera_bind_group_layout,
-                        // &blinky_bind_group_layout,
-                        // &cube_uniform_bind_group_layout,
-                        // &face_decal_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
                 }
@@ -340,10 +268,6 @@ impl State {
                     bind_group_layouts: &[
                         &static_bindings.layout,
                         &frame_bindings.layout,
-                        // &camera_bind_group_layout,
-                        // &blinky_bind_group_layout,
-                        // &cube_uniform_bind_group_layout,
-                        // &face_decal_bind_group_layout,
                     ],
                     push_constant_ranges: &[],
                 }
@@ -354,7 +278,7 @@ impl State {
                 source: wgpu::ShaderSource::Wgsl(shader_text.into()),
             };
             create_render_pipeline(
-                "cube_edge_pipeline",                        // label
+                "cube_edge_pipeline",                   // label
                 &device,                                // device
                 &layout,                                // layout
                 config.format,                          // color_format
@@ -382,7 +306,6 @@ impl State {
             cube_trackball,
             test_pattern,
             blinky_texture,
-            // blinky_bind_group,
             cube_face_pipeline,
             cube_edge_pipeline,
             static_bind_group,
@@ -517,7 +440,6 @@ impl State {
                 &mut render_pass,
                 &camera_prepared_data,
             );
-            // render_pass.set_bind_group(1, &self.blinky_bind_group, &[]);
             render_pass.set_pipeline(&self.cube_face_pipeline);
             self.cube.render(
                 &self.queue,
