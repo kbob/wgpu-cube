@@ -66,7 +66,7 @@ pub struct Cube {
 }
 
 impl Cube {
-    pub fn _new(
+    pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         color_format: wgpu::TextureFormat,
@@ -201,14 +201,14 @@ impl Cube {
                         },
                         count: None,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(
-                            wgpu::SamplerBindingType::Filtering,
-                        ),
-                        count: None,
-                    },
+                    // wgpu::BindGroupLayoutEntry {
+                    //     binding: 1,
+                    //     visibility: wgpu::ShaderStages::FRAGMENT,
+                    //     ty: wgpu::BindingType::Sampler(
+                    //         wgpu::SamplerBindingType::Filtering,
+                    //     ),
+                    //     count: None,
+                    // },
                 ],
             }
         );
@@ -231,12 +231,12 @@ impl Cube {
                                 &decal_texture.view,
                             ),
                         },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(
-                                &decal_texture.sampler,
-                            ),
-                        },
+                        // wgpu::BindGroupEntry {
+                        //     binding: 1,
+                        //     resource: wgpu::BindingResource::Sampler(
+                        //         &decal_texture.sampler,
+                        //     ),
+                        // },
                     ],
                 }
             )

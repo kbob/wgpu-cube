@@ -61,13 +61,13 @@ fn vs_main(
 
 [[group(1), binding(0)]]
 var t_blinky: texture_2d<u32>;
-[[group(1), binding(1)]]
-var s_blinky: sampler;
+// [[group(1), binding(1)]]
+// var s_blinky: sampler;
 
 [[group(3), binding(0)]]
 var t_decal: texture_2d<f32>;
-[[group(3), binding(1)]]
-var s_decal: sampler;
+// [[group(3), binding(1)]]
+// var s_decal: sampler;
 
 let face_base_color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
 let led_base_color: vec4<f32> = vec4<f32>(0.04, 0.04, 0.04, 1.0);

@@ -117,9 +117,64 @@ share them,
 Maybe, if I write one of those generic shaders, I can get by with two
 shaders: one for the LED surfaces and one for everything else.
 
-The first bind group should hold anything that's truly static -- textures,
-xforms for static objects, light properties?
+The first bind group should hold anything that's truly static --
+textures, xforms for static objects, light properties?
 
-The second bind group should be things that are used by several/all shaders.
+The second bind group should be things that are used by several/all
+shaders.
 
 The third should hold things that can change per render pass?
+
+### *SpongeBob narrator voice: one week later...*
+
+The shader knows all about the bindings.  They are declared in the
+shader source.  Group, position, type, and fields.  Entities know
+about the individual variables.  Type, fields, initial values, and
+when to update.
+
+In fact, the entity does not know about the shader.  It will be rendered
+by different shaders at various times.  There should be a level of
+indirection between the entities and the bind groups: the entity updates
+the variables' values, and the shaders reference the bindings.
+
+    impl ShaderVariable {
+      fn rebind<'a>(&mut self, resource: wgpu::BindingResource<'a>);
+    }
+
+Then the level of indirection will map between variable *names* and
+the ShaderVariable object.  *Names* in italics because a name could be
+a simple string, an ID number, or something more structured.
+
+The map is pretty static.  It should be a ref to the ShaderVariable?
+
+Then when bind groups are created, they get the current resource values
+from the variables.
+
+So the Binding is associated with the shader and pipeline, and it
+knows the name and the binding group/position.  The ShaderVariable is
+independent.  It knows the name, type, and fields.  The Entity
+knows when to update the variables' values.
+
+I *could* make the Binding generate shader source code for the bindings.
+Then I'd have to have some sort of DSL to declare the bindings in Rust
+source, compile to WGSL source, and prepend it to the shader source.
+
+A Binding has a layout and can create a BindGroup with the current
+resources.
+
+    impl Binding {
+      pub layout: wgpu::BindGroupLayout;
+      fn new(vars: &[ShaderVariableName]) -> Self;
+      fn create_bind_group(device) -> wgpu::BindGroup;
+    }
+
+    impl ShaderVariable {
+      fn new(name, type, fields) -> Self;
+      fn get(&self) -> resource;
+      fn set(&mut self, new_resource);
+    }
+
+    type ShaderVariableDirectory = std::HashMap<String, ShaderVariable>;
+    
+
+

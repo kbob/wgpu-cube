@@ -195,20 +195,20 @@ impl State {
         let blinky_texture_view = blinky_texture.create_view(
             &wgpu::TextureViewDescriptor::default()
         );
-        let blinky_texture_sampler = device.create_sampler(
-            &wgpu::SamplerDescriptor {
-                label: Some("blinky_sampler"),
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                mag_filter: wgpu::FilterMode::Nearest,
-                min_filter: wgpu::FilterMode::Linear,
-                mipmap_filter: wgpu::FilterMode::Linear,
-                lod_min_clamp: -100.0,
-                lod_max_clamp: 100.0,
-                ..Default::default()
-            }
-        );
+        // let blinky_texture_sampler = device.create_sampler(
+        //     &wgpu::SamplerDescriptor {
+        //         label: Some("blinky_sampler"),
+        //         address_mode_u: wgpu::AddressMode::ClampToEdge,
+        //         address_mode_v: wgpu::AddressMode::ClampToEdge,
+        //         address_mode_w: wgpu::AddressMode::ClampToEdge,
+        //         mag_filter: wgpu::FilterMode::Nearest,
+        //         min_filter: wgpu::FilterMode::Linear,
+        //         mipmap_filter: wgpu::FilterMode::Linear,
+        //         lod_min_clamp: -100.0,
+        //         lod_max_clamp: 100.0,
+        //         ..Default::default()
+        //     }
+        // );
         let blinky_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
                 label: Some("blinky_bind_group_layout"),
@@ -223,14 +223,14 @@ impl State {
                         },
                         count: None,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(
-                            wgpu::SamplerBindingType::Filtering,
-                        ),
-                        count: None,
-                    },
+                    // wgpu::BindGroupLayoutEntry {
+                    //     binding: 1,
+                    //     visibility: wgpu::ShaderStages::FRAGMENT,
+                    //     ty: wgpu::BindingType::Sampler(
+                    //         wgpu::SamplerBindingType::Filtering,
+                    //     ),
+                    //     count: None,
+                    // },
                 ],
             }
         );
@@ -245,19 +245,19 @@ impl State {
                             &blinky_texture_view,
                         ),
                     },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(
-                            &blinky_texture_sampler,
-                        ),
-                    }
+                    // wgpu::BindGroupEntry {
+                    //     binding: 1,
+                    //     resource: wgpu::BindingResource::Sampler(
+                    //         &blinky_texture_sampler,
+                    //     ),
+                    // },
                 ],
             }
         );
 
         // Cube Object
 
-        let cube = cube::Cube::_new(
+        let cube = cube::Cube::new(
             &device,
             &queue,
             config.format,
