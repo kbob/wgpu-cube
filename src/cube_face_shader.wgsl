@@ -3,14 +3,16 @@
 struct CameraUniform {
     view_proj: mat4x4<f32>;
 };
-[[group(0), binding(0)]]
+//[[group(0), binding(0)]]
+[[group(0), binding(1)]]
 var<uniform> camera: CameraUniform;
 
 struct CubeUniform {
     cube_to_world: mat4x4<f32>;
     decal_visibility: f32;
 };
-[[group(2), binding(0)]]
+// [[group(2), binding(0)]]
+[[group(1), binding(1)]]
 var<uniform> cube: CubeUniform;
 
 struct InstanceStaticInput {
@@ -59,15 +61,13 @@ fn vs_main(
 
 // Fragment shader
 
+// [[group(1), binding(0)]]
 [[group(1), binding(0)]]
 var t_blinky: texture_2d<u32>;
-// [[group(1), binding(1)]]
-// var s_blinky: sampler;
 
-[[group(3), binding(0)]]
+// [[group(3), binding(0)]]
+[[group(0), binding(0)]]
 var t_decal: texture_2d<f32>;
-// [[group(3), binding(1)]]
-// var s_decal: sampler;
 
 let face_base_color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
 let led_base_color: vec4<f32> = vec4<f32>(0.04, 0.04, 0.04, 1.0);

@@ -5,10 +5,11 @@ use winit::{
     window::WindowBuilder,
 };
 
+mod binding;
 mod camera;
 mod cube;
 mod cube_model;
-mod lights;
+// mod lights;
 mod test_pattern;
 mod texture;
 mod traits;
@@ -31,7 +32,7 @@ pub enum Hand {
 const WORLD_HANDEDNESS: Hand = Hand::Right;
 
 const BACKGROUND_COLOR: wgpu::Color = wgpu::Color {
-    r: 0.00250, g: 0.00625, b: 0.01500, a: 1.0,
+    r: 0.00250, g: 0.00625, b: 0.01500 , a: 1.0,
 };
 
 fn create_render_pipeline(
@@ -116,7 +117,11 @@ struct State {
     cube_trackball: trackball::Trackball,
     test_pattern: test_pattern::TestPattern,
     blinky_texture: wgpu::Texture,
-    blinky_bind_group: wgpu::BindGroup,
+    // blinky_bind_group: wgpu::BindGroup,
+    cube_face_pipeline: wgpu::RenderPipeline,
+    cube_edge_pipeline: wgpu::RenderPipeline,
+    static_bind_group: wgpu::BindGroup,
+    frame_bind_group: wgpu::BindGroup,
     first_frame_time: Option<std::time::Instant>,
 }
 
@@ -139,7 +144,7 @@ impl State {
 
         // ensure textures big enough for full screen MSAA.
         let device_limits = wgpu::Limits {
-            max_bind_groups: 8,
+            // max_bind_groups: 8,
             ..wgpu::Limits::default().using_resolution(adapter.limits())
         };
 
@@ -209,60 +214,60 @@ impl State {
         //         ..Default::default()
         //     }
         // );
-        let blinky_bind_group_layout = device.create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor {
-                label: Some("blinky_bind_group_layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Uint,
-                        },
-                        count: None,
-                    },
-                    // wgpu::BindGroupLayoutEntry {
-                    //     binding: 1,
-                    //     visibility: wgpu::ShaderStages::FRAGMENT,
-                    //     ty: wgpu::BindingType::Sampler(
-                    //         wgpu::SamplerBindingType::Filtering,
-                    //     ),
-                    //     count: None,
-                    // },
-                ],
-            }
-        );
-        let blinky_bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                label: Some("blinky_bind_group"),
-                layout: &blinky_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(
-                            &blinky_texture_view,
-                        ),
-                    },
-                    // wgpu::BindGroupEntry {
-                    //     binding: 1,
-                    //     resource: wgpu::BindingResource::Sampler(
-                    //         &blinky_texture_sampler,
-                    //     ),
-                    // },
-                ],
-            }
-        );
+        // let blinky_bind_group_layout = device.create_bind_group_layout(
+        //     &wgpu::BindGroupLayoutDescriptor {
+        //         label: Some("blinky_bind_group_layout"),
+        //         entries: &[
+        //             wgpu::BindGroupLayoutEntry {
+        //                 binding: 0,
+        //                 visibility: wgpu::ShaderStages::FRAGMENT,
+        //                 ty: wgpu::BindingType::Texture {
+        //                     multisampled: false,
+        //                     view_dimension: wgpu::TextureViewDimension::D2,
+        //                     sample_type: wgpu::TextureSampleType::Uint,
+        //                 },
+        //                 count: None,
+        //             },
+        //             // wgpu::BindGroupLayoutEntry {
+        //             //     binding: 1,
+        //             //     visibility: wgpu::ShaderStages::FRAGMENT,
+        //             //     ty: wgpu::BindingType::Sampler(
+        //             //         wgpu::SamplerBindingType::Filtering,
+        //             //     ),
+        //             //     count: None,
+        //             // },
+        //         ],
+        //     }
+        // );
+        // let blinky_bind_group = device.create_bind_group(
+        //     &wgpu::BindGroupDescriptor {
+        //         label: Some("blinky_bind_group"),
+        //         layout: &blinky_bind_group_layout,
+        //         entries: &[
+        //             wgpu::BindGroupEntry {
+        //                 binding: 0,
+        //                 resource: wgpu::BindingResource::TextureView(
+        //                     &blinky_texture_view,
+        //                 ),
+        //             },
+        //             // wgpu::BindGroupEntry {
+        //             //     binding: 1,
+        //             //     resource: wgpu::BindingResource::Sampler(
+        //             //         &blinky_texture_sampler,
+        //             //     ),
+        //             // },
+        //         ],
+        //     }
+        // );
 
         // Cube Object
 
         let cube = cube::Cube::new(
             &device,
             &queue,
-            config.format,
-            &camera.get_bind_group_layout(),
-            &blinky_bind_group_layout,
+            // config.format,
+            // &camera.get_bind_group_layout(),
+            // &blinky_bind_group_layout,
         );
 
         let cube_trackball = trackball::Trackball::new(&size);
@@ -278,6 +283,89 @@ impl State {
                 Hand::Right => wgpu::CompareFunction::GreaterEqual,
             },
         );
+
+        let static_bindings = binding::StaticBg::new(&device);
+        let frame_bindings = binding::FrameBg::new(&device);
+        let static_bind_group = static_bindings.create_bind_group(
+            &device,
+            wgpu::BindingResource::TextureView(
+                &cube.face_decal_texture.view,
+            ),
+            camera.uniform_buffer.as_entire_binding(),
+        );
+        let frame_bind_group = frame_bindings.create_bind_group(
+            &device,
+            wgpu::BindingResource::TextureView(&blinky_texture_view),
+            cube.cube_uniform_buffer.as_entire_binding(),
+        );
+
+        let cube_face_pipeline = {
+            let layout = device.create_pipeline_layout(
+                &wgpu::PipelineLayoutDescriptor {
+                    label: Some("cube_face_pipeline_layout"),
+                    bind_group_layouts: &[
+                        &static_bindings.layout,
+                        &frame_bindings.layout,
+                        // &camera_bind_group_layout,
+                        // &blinky_bind_group_layout,
+                        // &cube_uniform_bind_group_layout,
+                        // &face_decal_bind_group_layout,
+                    ],
+                    push_constant_ranges: &[],
+                }
+            );
+            let shader_text = include_str!("cube_face_shader.wgsl");
+            let shader = wgpu::ShaderModuleDescriptor {
+                label: Some("cube_face_shader"),
+                source: wgpu::ShaderSource::Wgsl(shader_text.into()),
+            };
+            create_render_pipeline(
+                "cube_face_pipeline",                   // label
+                &device,                                // device
+                &layout,                                // layout
+                config.format,                          // color_format
+                Some(texture::Texture::DEPTH_FORMAT),   // depth_format
+                &[                                      // vertex_layouts
+                    cube_model::FaceVertex::desc(),
+                    cube::FaceStaticInstanceRaw::desc(),
+                ],
+                shader,                                 // shader
+            )
+        };
+
+        let cube_edge_pipeline = {
+            let layout = device.create_pipeline_layout(
+                &wgpu::PipelineLayoutDescriptor {
+                    label: Some("cube_edge_pipeline_layout"),
+                    bind_group_layouts: &[
+                        &static_bindings.layout,
+                        &frame_bindings.layout,
+                        // &camera_bind_group_layout,
+                        // &blinky_bind_group_layout,
+                        // &cube_uniform_bind_group_layout,
+                        // &face_decal_bind_group_layout,
+                    ],
+                    push_constant_ranges: &[],
+                }
+            );
+            let shader_text = include_str!("cube_edge_shader.wgsl");
+            let shader = wgpu::ShaderModuleDescriptor {
+                label: Some("cube_edge_shader"),
+                source: wgpu::ShaderSource::Wgsl(shader_text.into()),
+            };
+            create_render_pipeline(
+                "cube_edge_pipeline",                        // label
+                &device,                                // device
+                &layout,                                // layout
+                config.format,                          // color_format
+                Some(texture::Texture::DEPTH_FORMAT),   // depth_format
+                &[                                      // vertex_layouts
+                    cube_model::EdgeVertex::desc(),
+                ],
+                shader,                                 // shader
+            )
+        };
+
         let first_frame_time = None;
 
         // Results
@@ -294,7 +382,11 @@ impl State {
             cube_trackball,
             test_pattern,
             blinky_texture,
-            blinky_bind_group,
+            // blinky_bind_group,
+            cube_face_pipeline,
+            cube_edge_pipeline,
+            static_bind_group,
+            frame_bind_group,
             first_frame_time,
         }
     }
@@ -345,14 +437,17 @@ impl State {
             }
         );
 
-        let cube_prepared_data = self.cube.prepare(
-            &cube::CubeAttributes {
+        let cube_face_prepared_data = self.cube.prepare(
+            &cube::CubeFaceAttributes {
                 frame_time:
                     self.first_frame_time
                         .get_or_insert_with(|| std::time::Instant::now())
                         .elapsed()
                         .as_secs_f32(),
             }
+        );
+        let cube_edge_prepared_data = self.cube.prepare(
+            &cube::CubeEdgeAttributes {},
         );
         let camera_prepared_data = self.camera.prepare(
             &camera::CameraAttributes {}
@@ -405,20 +500,36 @@ impl State {
             }
 
             // Bind Groups
-            //  0.  Camera Uniform
-            //  1.  Blinky Texture
-            //  2.  Cube Uniform
-            //  3.  Cube Decal Texture
+            //  0.  [Face Decal, Camera Uniform]
+            //  1.  [Blinky Texture, Cube Uniform]
+            render_pass.set_bind_group(
+                binding::Bg::STATIC.0,
+                &self.static_bind_group,
+                &[],
+            );
+            render_pass.set_bind_group(
+                binding::Bg::FRAME.0,
+                &self.frame_bind_group,
+                &[],
+            );
             self.camera.render(
                 &self.queue,
                 &mut render_pass,
                 &camera_prepared_data,
             );
-            render_pass.set_bind_group(1, &self.blinky_bind_group, &[]);
+            // render_pass.set_bind_group(1, &self.blinky_bind_group, &[]);
+            render_pass.set_pipeline(&self.cube_face_pipeline);
             self.cube.render(
                 &self.queue,
                 &mut render_pass,
-                &cube_prepared_data,
+                &cube_face_prepared_data,
+            );
+
+            render_pass.set_pipeline(&self.cube_edge_pipeline);
+            self.cube.render(
+                &self.queue,
+                &mut render_pass,
+                &cube_edge_prepared_data,
             );
         }
 
