@@ -48,9 +48,12 @@ impl TestPattern {
             false => (pos, SIDE - pos - 1),
             true => (HALF_SIDE - pos - 1, HALF_SIDE + pos),
         };
-        const BPP: usize = CHANNELS;        // 4 bytes per pixel
-        const BPFR: usize = SIDE * BPP;     // 64 pixels per face row
-        const BPCR: usize = FACES * BPFR;   // 6 face rows per row
+        // BPP:  4 bytes per pixel
+        // BPFR: 64 pixels per face row
+        // BPCR: 6 face rows per row
+        const BPP: usize = CHANNELS;
+        const BPFR: usize = SIDE * BPP;
+        const BPCR: usize = FACES * BPFR;
         fn index_4d(face: usize, row: usize, col: usize, chan: usize) -> usize {
             BPCR * row + BPFR * (FACES - face - 1) + BPP * col + chan
         }

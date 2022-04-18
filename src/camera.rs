@@ -1,8 +1,8 @@
 use cgmath::prelude::*;
 use wgpu::util::DeviceExt;
 
-use crate::Hand;
 use crate::traits::Renderable;
+use crate::Hand;
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -43,21 +43,18 @@ impl Camera {
         device: &wgpu::Device,
         width: u32,
         height: u32,
-        world_hand: Hand
+        world_hand: Hand,
     ) -> Self {
         let uniform_raw = CameraUniformRaw {
             view_proj: cgmath::Matrix4::<f32>::identity().into(),
         };
-        let uniform_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
+        let uniform_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("camera_uniform_buffer"),
                 contents: bytemuck::cast_slice(&[uniform_raw]),
-                usage: (
-                    wgpu::BufferUsages::UNIFORM |
-                    wgpu::BufferUsages::COPY_DST
-                ),
-            }
-        );
+                usage: wgpu::BufferUsages::UNIFORM
+                    | wgpu::BufferUsages::COPY_DST,
+            });
 
         Self {
             // hardcoded position, oh my!
@@ -100,7 +97,7 @@ pub struct CameraPreparedData {
 
 impl Renderable<CameraAttributes, CameraPreparedData> for Camera {
     fn prepare(&self, _: &CameraAttributes) -> CameraPreparedData {
-        return CameraPreparedData {
+        CameraPreparedData {
             camera_uniform: CameraUniformRaw {
                 view_proj: self.build_view_projection_matrix().into(),
             },
