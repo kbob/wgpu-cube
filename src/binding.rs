@@ -1,18 +1,9 @@
-// Bindings
-
-#[allow(dead_code)]
-pub struct Bg(pub u32);
-
-impl Bg {
-    pub const STATIC: Bg = Bg { 0: 0 };
-    pub const FRAME: Bg = Bg { 0: 1 };
-}
-
-pub struct StaticBg {
+pub struct StaticBindings {
     pub layout: wgpu::BindGroupLayout,
 }
 
-impl StaticBg {
+impl StaticBindings {
+    pub const GROUP_INDEX: u32 = 0;
     const FACE_DECAL: u32 = 0;
     const CAMERA_UNIFORM: u32 = 1;
     // const LIGHTS_UNIFORM: u32 = 2;
@@ -77,11 +68,12 @@ impl StaticBg {
     }
 }
 
-pub struct FrameBg {
+pub struct FrameBindings {
     pub layout: wgpu::BindGroupLayout,
 }
 
-impl FrameBg {
+impl FrameBindings {
+    pub const GROUP_INDEX: u32 = 1;
     const BLINKY_TEXTURE: u32 = 0;
     const CUBE_UNIFORM: u32 = 1;
 

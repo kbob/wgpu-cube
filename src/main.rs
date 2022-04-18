@@ -216,8 +216,8 @@ impl State {
             },
         );
 
-        let static_bindings = binding::StaticBg::new(&device);
-        let frame_bindings = binding::FrameBg::new(&device);
+        let static_bindings = binding::StaticBindings::new(&device);
+        let frame_bindings = binding::FrameBindings::new(&device);
         let static_bind_group = static_bindings.create_bind_group(
             &device,
             wgpu::BindingResource::TextureView(
@@ -426,12 +426,12 @@ impl State {
             //  0.  [Face Decal, Camera Uniform]
             //  1.  [Blinky Texture, Cube Uniform]
             render_pass.set_bind_group(
-                binding::Bg::STATIC.0,
+                binding::StaticBindings::GROUP_INDEX,
                 &self.static_bind_group,
                 &[],
             );
             render_pass.set_bind_group(
-                binding::Bg::FRAME.0,
+                binding::FrameBindings::GROUP_INDEX,
                 &self.frame_bind_group,
                 &[],
             );

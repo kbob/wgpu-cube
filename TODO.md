@@ -15,7 +15,7 @@
  * need a way to keep track of bind groups.
  * move most of the event handling out of main.rs?
  * ~~convert trackball to use a quaternion instead of a matrix.~~
- * get rid of the bindings::Bg struct.
+ * ~~get rid of the bindings::Bg struct.~~
  * create a trait for generating a BindingResource?
  * maybe create a module for shaders and pipelines?
  * move blinky into its own module.
