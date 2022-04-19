@@ -12,7 +12,7 @@
  * ~~rename cube_face_shader_NEW.~~
  * ~~rename cube.texture to cube.decal.~~
  * ~~move camera to its own file.~~
- * need a way to keep track of bind groups.
+ * ~~need a way to keep track of bind groups.~~
  * move most of the event handling out of main.rs?
  * ~~convert trackball to use a quaternion instead of a matrix.~~
  * ~~get rid of the bindings::Bg struct.~~

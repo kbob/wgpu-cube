@@ -22,6 +22,7 @@ use trackball::{
 
 const BACKFACE_CULL: bool = true;
 const ALPHA_BLENDING: bool = false;
+const SAMPLE_COUNT: u32 = 4;
 
 #[allow(dead_code)]
 #[derive(PartialEq)]
@@ -80,7 +81,7 @@ fn create_render_pipeline(
                     bias: wgpu::DepthBiasState::default(),
                 }),
             multisample: wgpu::MultisampleState {
-                count: 1,
+                count: SAMPLE_COUNT,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
@@ -105,6 +106,31 @@ fn create_render_pipeline(
     )
 }
 
+fn create_multisampled_framebuffer(
+    device: &wgpu::Device,
+    config: &wgpu::SurfaceConfiguration,
+) -> wgpu::TextureView {
+    let multisampled_texture_extent = wgpu::Extent3d {
+        width: config.width,
+        height: config.height,
+        depth_or_array_layers: 1,
+    };
+
+    device
+        .create_texture(
+            &wgpu::TextureDescriptor {
+                label: Some("multisampleed_frame_texture"),
+                size: multisampled_texture_extent,
+                mip_level_count: 1,
+                sample_count: SAMPLE_COUNT,
+                dimension: wgpu::TextureDimension::D2,
+                format: config.format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            }
+        )
+        .create_view(&wgpu::TextureViewDescriptor::default())
+}
+
 struct State {
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface,
@@ -112,6 +138,7 @@ struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     depth_texture: texture::Texture,
+    multisampled_framebuffer: wgpu::TextureView,
     camera: camera::Camera,     // Buffalo buffalo Buffalo...
     cube: cube::Cube,           // ... buffalo buffalo buffalo...
     cube_trackball: trackball::Trackball,
@@ -195,7 +222,10 @@ impl State {
             }
         );
         let blinky_texture_view = blinky_texture.create_view(
-            &wgpu::TextureViewDescriptor::default()
+            &wgpu::TextureViewDescriptor {
+                label: Some("blinky_texture_view"),
+                ..Default::default()
+            }
         );
 
         // Cube Object
@@ -214,7 +244,13 @@ impl State {
                 Hand::Left => wgpu::CompareFunction::LessEqual,
                 Hand::Right => wgpu::CompareFunction::GreaterEqual,
             },
+            SAMPLE_COUNT,
         );
+
+        // Multisampled Framebuffer
+
+        let multisampled_framebuffer =
+            create_multisampled_framebuffer(&device, &config);
 
         let static_bindings = binding::StaticBindings::new(&device);
         let frame_bindings = binding::FrameBindings::new(&device);
@@ -301,6 +337,7 @@ impl State {
             queue,
             config,
             depth_texture,
+            multisampled_framebuffer,
             camera,
             cube,
             cube_trackball,
@@ -329,7 +366,10 @@ impl State {
                     Hand::Left => wgpu::CompareFunction::LessEqual,
                     Hand::Right => wgpu::CompareFunction::GreaterEqual,
                 },
+                SAMPLE_COUNT,
             );
+            self.multisampled_framebuffer =
+                create_multisampled_framebuffer(&self.device, &self.config);
             self.cube_trackball.set_viewport_size(&new_size);
         }
     }
@@ -382,8 +422,10 @@ impl State {
                     label: Some("render_pass"),
                     color_attachments: &[
                         wgpu::RenderPassColorAttachment {
-                            view: &view,
-                            resolve_target: None,
+                            // view: &view,
+                            // resolve_target: None,
+                            view: &self.multisampled_framebuffer,
+                            resolve_target: Some(&view),
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(BACKGROUND_COLOR),
                                 store: true,

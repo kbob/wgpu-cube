@@ -16,6 +16,7 @@ impl Texture {
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
         compare: wgpu::CompareFunction,
+        sample_count: u32,
     ) -> Self {
         let size = wgpu::Extent3d {
             width: config.width,
@@ -26,7 +27,7 @@ impl Texture {
             label: Some(label),
             size,
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: sample_count,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT

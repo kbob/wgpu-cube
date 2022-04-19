@@ -63,7 +63,7 @@ impl Camera {
             up: cgmath::Vector3::unit_y(),
             aspect: width as f32 / height as f32,
             fovy: 45.0,
-            znear: 1.0,
+            znear: 100.0,
             zfar: 1000.0,
             world_hand: world_hand,
             uniform_buffer,

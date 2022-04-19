@@ -29,8 +29,8 @@ struct VertexInput {
 
 struct VertexOutput {
     [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(0)]] normal: vec3<f32>;
-    [[location(1)]] decal_coords: vec2<f32>;
+    [[location(0), interpolate(perspective, sample)]] normal: vec3<f32>;
+    [[location(1), interpolate(perspective, sample)]] decal_coords: vec2<f32>;
 };
 
 [[stage(vertex)]]

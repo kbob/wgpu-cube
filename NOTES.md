@@ -176,5 +176,18 @@ resources.
 
     type ShaderVariableDirectory = std::HashMap<String, ShaderVariable>;
     
+# References
 
+**[Depth Precision Visualized](https://developer.nvidia.com/content/depth-precision-visualized)**<br>
+Nathan Reed, NVIDIA Developer Content<br>
+Explains depth buffer resolution nonlinearities.
+Basically, Znear = 0 is best.  Znear = +1 (DirectX) or -1 (OpenGL)
+significantly reduces a floating point Z buffer's linearity.
 
+**[Real-time Shadows](https://docs.google.com/presentation/d/1MwJcnSvkAzpT8BuoSqIkzlYLjdA_lBDrt8bW-vcwmDU/edit#slide=id.p)**<br>
+Javi Agenjo 2020<br>
+Slide show gives a good overview of shadow mapping.
+
+**Virtual Trackballs Revisited**<br>
+Henriksen, Sporing, Hornbaek<br>
+DOI:10.1109/TVCG.2004.1260772<br>
