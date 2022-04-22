@@ -1,6 +1,7 @@
 // Vertex shader
 
 struct CameraUniform {
+    view_position: vec4<f32>;
     view_proj: mat4x4<f32>;
 };
 [[group(0), binding(1)]]
@@ -42,8 +43,9 @@ struct VertexInput {
 
 struct VertexOutput {
     [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(0), interpolate(perspective, sample)]] normal: vec3<f32>;
-    [[location(1), interpolate(perspective, sample)]] decal_coords: vec2<f32>;
+    [[location(0), interpolate(perspective, sample)]] world_position: vec3<f32>;
+    [[location(1), interpolate(perspective, sample)]] normal: vec3<f32>;
+    [[location(2), interpolate(perspective, sample)]] decal_coords: vec2<f32>;
 };
 
 fn extract3x3(in: mat4x4<f32>) -> mat3x3<f32> {
@@ -87,51 +89,99 @@ var t_blinky: texture_2d<u32>;
 [[group(0), binding(0)]]
 var t_decal: texture_2d<f32>;
 
-let face_base_color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+let face_base_color: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
 let led_base_color: vec4<f32> = vec4<f32>(0.04, 0.04, 0.04, 1.0);
-let led_r2: f32 = 0.10;
+let led_r2: f32 = 0.15;
+let led_bleed_r2: f32 = 0.20;
 
-fn lambert_diffuse(normal: vec3<f32>, light_dir: vec3<f32>) -> f32 {
-    return max(0.0, dot(normal, light_dir));
+fn lambert_diffuse(
+    light_color: vec3<f32>,
+    normal: vec3<f32>,
+    light_dir: vec3<f32>
+) -> vec3<f32> {
+    return max(0.0, dot(normal, light_dir)) * light_color;
 }
 
-[[stage(fragment)]]
-fn YYYfs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
-    let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
-    let pix_coord = t_coord * 64.0;
-    let pix_center = round(pix_coord);
-    let tex_index = vec2<i32>(pix_center);
+fn burley_diffuse(
+    normal: vec3<f32>,
+    light_dir: vec3<f32>,
+    view_dir: vec3<f32>,
+    )
+-> f32 {
+    return 0.0;
+}
 
+fn phong_specular(
+    light_color: vec3<f32>,
+    normal: vec3<f32>,
+    light_dir: vec3<f32>,
+    view_dir: vec3<f32>,
+) -> vec3<f32> {
+    let reflect_dir = reflect(-light_dir, normal);
+    let specular_strength = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0);
+    let specular_color = specular_strength * light_color;
+    return specular_color;
+}
 
-    let normal = normalize(in.normal);
-    var color: vec3<f32> = face_base_color.rgb;
-    let decal_color = vec4<f32>(textureLoad(t_decal, tex_index, 0));
-    color = max(color, decal_color.rgb);
-    color = color + lights.lights[0].color.rgb * face_base_color.rgb;
+fn blinn_phong_specular(
+    light_color: vec3<f32>,
+    normal: vec3<f32>,
+    light_dir: vec3<f32>,
+    view_dir: vec3<f32>,
+) -> vec3<f32> {
+    let half_dir = normalize(view_dir + light_dir);
+    let specular_strength = pow(max(dot(normal, half_dir), 0.0), 32.0);
+    let specular_color = specular_strength * light_color;
+    return specular_color;
+}
+
+fn face_color(
+    tex_index: vec2<i32>,
+    normal: vec3<f32>,
+    view_dir: vec3<f32>,
+) -> vec4<f32> {
+    let decal_pixel = vec4<f32>(textureLoad(t_decal, tex_index, 0));
+    var material_color = face_base_color.rgb;
+    material_color = max(material_color, 2.0 * decal_pixel.rgb);
+    var color = vec3<f32>(0.0);
+
+    // Ambient
+    color = color + lights.lights[0].color.rgb * material_color;
+
+    // Directional lights
     for (var i = 1u; i < lights.count; i = i + 1u) {
         let light = lights.lights[i];
-        var light_dir = light.direction.xyz;
+        var light_dir = normalize(light.direction.xyz);
 
-        light_dir = normalize(light_dir);
-        let diffuse = lambert_diffuse(normal, light_dir);
-
-        color = color + diffuse * light.color.rgb;
+        let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
+        let specular =
+            blinn_phong_specular(light.color.rgb, normal, light_dir, view_dir);
+        color = color + material_color * (diffuse + specular);
     }
-    return vec4<f32>(color, face_base_color.a);
+    let alpha = face_base_color.a * decal_pixel.a;
+    return vec4<f32>(color, alpha);
+}
+
+fn led_color(
+    tex_index: vec2<i32>,
+) -> vec4<f32> {
+    let blinky_color = vec4<f32>(textureLoad(t_blinky, tex_index, 0)) / 255.0;
+    let led_color = max(led_base_color, blinky_color);
+    return led_color;
 }
 
 [[stage(fragment)]]
 fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
-    // 0 <= x <= 6; 0 <= y <= 1
     let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
     let pix_coord = t_coord * 64.0;
     let pix_center = round(pix_coord);
     let tex_index = vec2<i32>(pix_center);
 
-    let decal_color = vec4<f32>(textureLoad(t_decal, tex_index, 0));
-    let blinky_color = vec4<f32>(textureLoad(t_blinky, tex_index, 0)) / 255.0;
-    let face_color = max(face_base_color, cube.decal_visibility * decal_color);
-    var led_color = max(led_base_color, blinky_color);
+    let normal = normalize(in.normal);
+    let view_dir = normalize(camera.view_position.xyz - in.world_position);
+
+    let face_color = face_color(tex_index, normal, view_dir);
+    let led_color = led_color(tex_index);
 
     let pix_pos = pix_coord - pix_center;
     let pix_r2: f32 = pix_pos.x * pix_pos.x + pix_pos.y * pix_pos.y;

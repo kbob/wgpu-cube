@@ -22,6 +22,7 @@ pub const LEFT_HAND_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraUniformRaw {
+    view_position: [f32; 4],
     view_proj: [[f32; 4]; 4],
 }
 
@@ -46,6 +47,7 @@ impl Camera {
         world_hand: Hand,
     ) -> Self {
         let uniform_raw = CameraUniformRaw {
+            view_position: [0.0, 0.0, 0.0, 0.0],
             view_proj: cgmath::Matrix4::<f32>::identity().into(),
         };
         let uniform_buffer =
@@ -99,6 +101,7 @@ impl Renderable<CameraAttributes, CameraPreparedData> for Camera {
     fn prepare(&self, _: &CameraAttributes) -> CameraPreparedData {
         CameraPreparedData {
             camera_uniform: CameraUniformRaw {
+                view_position: self.eye.to_homogeneous().into(),
                 view_proj: self.build_view_projection_matrix().into(),
             },
         }
