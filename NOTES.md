@@ -178,16 +178,36 @@ resources.
     
 # References
 
-**[Depth Precision Visualized](https://developer.nvidia.com/content/depth-precision-visualized)**<br>
-Nathan Reed, NVIDIA Developer Content<br>
+### **[Depth Precision Visualized](https://developer.nvidia.com/content/depth-precision-visualized)**
+*Nathan Reed, NVIDIA Developer Content*<br>
 Explains depth buffer resolution nonlinearities.
 Basically, Znear = 0 is best.  Znear = +1 (DirectX) or -1 (OpenGL)
 significantly reduces a floating point Z buffer's linearity.
 
-**[Real-time Shadows](https://docs.google.com/presentation/d/1MwJcnSvkAzpT8BuoSqIkzlYLjdA_lBDrt8bW-vcwmDU/edit#slide=id.p)**<br>
-Javi Agenjo 2020<br>
+### **[Real-time Shadows](https://docs.google.com/presentation/d/1MwJcnSvkAzpT8BuoSqIkzlYLjdA_lBDrt8bW-vcwmDU/edit#slide=id.p)**
+*Javi Agenjo 2020*<br>
 Slide show gives a good overview of shadow mapping.
 
-**Virtual Trackballs Revisited**<br>
-Henriksen, Sporing, Hornbaek<br>
+### **Virtual Trackballs Revisited**
+*Henriksen, Sporing, Hornbaek*<br>
 DOI:10.1109/TVCG.2004.1260772<br>
+
+### **[Physically Based Shading at Disney](https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf)**
+*Brent Burley, Walt Disney Animation Studios*<br>
+Explains Disney Animation's PBR material model circa 2014.
+
+### **[Exponentially Better Rotations](https://thenumbat.github.io/Exponential-Rotations/)**
+*Max Slater*<br>
+Rotation math.  Hurts head.
+
+### **[Visualizing Quaternions](https://eater.net/quaternions)**
+*Grant Sanderson, Ben Eater*<br>
+Rotation math.  Hurts head but with "interactive video".
+
+### **[Debugging with Xcode](https://github.com/gfx-rs/wgpu/wiki/Debugging-with-Xcode)**
+*Joshua Groves, wgpu-rs Wiki*<br>
+You can run wgpu programs under Xcode to use the Metal inspector.
+
+### **[Developing and Debugging Metal Shaders](https://developer.apple.com/documentation/metal/developing_and_debugging_metal_shaders)**
+*Apple*
+Xcode has a very useful Metal debugging inspector.

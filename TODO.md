@@ -19,6 +19,7 @@
  * create a trait for generating a BindingResource?
  * maybe create a module for shaders and pipelines?
  * move blinky into its own module.
+ * only push camera and lights uniforms to GPU when they change.
 
 ## Features
 

@@ -58,7 +58,7 @@ impl Camera {
 
         Self {
             // hardcoded position, oh my!
-            eye: (100.0, 150.0, 200.0).into(),
+            eye: (000.0, 150.0, 250.0).into(),
             target: (60.0, 0.0, 0.0).into(),
             up: cgmath::Vector3::unit_y(),
             aspect: width as f32 / height as f32,
@@ -89,7 +89,7 @@ impl Camera {
     }
 }
 
-pub struct CameraAttributes {}
+pub struct CameraAttributes();
 
 pub struct CameraPreparedData {
     camera_uniform: CameraUniformRaw,

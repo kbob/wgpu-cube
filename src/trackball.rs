@@ -61,6 +61,7 @@ impl Trackball {
 
     pub fn new(viewport_size: &PhysicalSize<u32>) -> Self {
         let now = Instant::now();
+
         Self {
             cached_xform: None,
             cur_orientation: Quaternion::<f32>::one(),
@@ -68,7 +69,7 @@ impl Trackball {
             rot_per_dt: Some(
                 Quaternion::<f32>::from_axis_angle(
                     Vector3::<f32>::unit_y(),
-                    Rad::<f32>(std::f32::consts::PI / 256.0),
+                    Rad::<f32>(std::f32::consts::PI / 512.0),
                 )
             ),
             drag_dt: Duration::new(0, 1_000_000_000 / 60),

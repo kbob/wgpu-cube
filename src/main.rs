@@ -9,7 +9,7 @@ mod binding;
 mod camera;
 mod cube;
 mod cube_model;
-// mod lights;
+mod lights;
 mod test_pattern;
 mod texture;
 mod traits;
@@ -140,7 +140,8 @@ struct State {
     depth_texture: texture::Texture,
     multisampled_framebuffer: wgpu::TextureView,
     camera: camera::Camera,     // Buffalo buffalo Buffalo...
-    cube: cube::Cube,           // ... buffalo buffalo buffalo...
+    lights: lights::Lights,     // ... buffalo buffalo buffalo...
+    cube: cube::Cube,           // ... Buffalo buffalo.
     cube_trackball: trackball::Trackball,
     test_pattern: test_pattern::TestPattern,
     blinky_texture: wgpu::Texture,
@@ -199,6 +200,10 @@ impl State {
             size.height,
             WORLD_HANDEDNESS,
         );
+
+        // Lights
+
+        let lights = lights::Lights::new(&device);
 
         // Blinky
 
@@ -260,6 +265,7 @@ impl State {
                 &cube.face_decal_texture.view,
             ),
             camera.uniform_buffer.as_entire_binding(),
+            lights.uniform_buffer.as_entire_binding(),
         );
         let frame_bind_group = frame_bindings.create_bind_group(
             &device,
@@ -339,6 +345,7 @@ impl State {
             depth_texture,
             multisampled_framebuffer,
             camera,
+            lights,
             cube,
             cube_trackball,
             test_pattern,
@@ -415,6 +422,9 @@ impl State {
         let camera_prepared_data = self.camera.prepare(
             &camera::CameraAttributes {}
         );
+        let lights_prepared_data = self.lights.prepare(
+            &lights::LightsAttributes {}
+        );
         
         {
             let mut render_pass = encoder.begin_render_pass(
@@ -422,8 +432,6 @@ impl State {
                     label: Some("render_pass"),
                     color_attachments: &[
                         wgpu::RenderPassColorAttachment {
-                            // view: &view,
-                            // resolve_target: None,
                             view: &self.multisampled_framebuffer,
                             resolve_target: Some(&view),
                             ops: wgpu::Operations {
@@ -482,19 +490,25 @@ impl State {
                 &mut render_pass,
                 &camera_prepared_data,
             );
+            self.lights.render(
+                &self.queue,
+                &mut render_pass,
+                &lights_prepared_data,
+            );
             render_pass.set_pipeline(&self.cube_face_pipeline);
             self.cube.render(
                 &self.queue,
                 &mut render_pass,
                 &cube_face_prepared_data,
             );
-
-            render_pass.set_pipeline(&self.cube_edge_pipeline);
-            self.cube.render(
-                &self.queue,
-                &mut render_pass,
-                &cube_edge_prepared_data,
-            );
+            if true {
+                render_pass.set_pipeline(&self.cube_edge_pipeline);
+                self.cube.render(
+                    &self.queue,
+                    &mut render_pass,
+                    &cube_edge_prepared_data,
+                );
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

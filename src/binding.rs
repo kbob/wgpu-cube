@@ -6,7 +6,7 @@ impl StaticBindings {
     pub const GROUP_INDEX: u32 = 0;
     const FACE_DECAL: u32 = 0;
     const CAMERA_UNIFORM: u32 = 1;
-    // const LIGHTS_UNIFORM: u32 = 2;
+    const LIGHTS_UNIFORM: u32 = 2;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let layout =
@@ -35,12 +35,19 @@ impl StaticBindings {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: Self::LIGHTS_UNIFORM,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
-            }
-        );
-        Self {
-            layout,
-        }
+            });
+        Self { layout }
     }
 
     pub fn create_bind_group(
@@ -48,23 +55,26 @@ impl StaticBindings {
         device: &wgpu::Device,
         face_decal: wgpu::BindingResource,
         camera_uniform: wgpu::BindingResource,
+        lights_uniform: wgpu::BindingResource,
     ) -> wgpu::BindGroup {
-        device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                label: Some("static_bind_group"),
-                layout: &self.layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: Self::FACE_DECAL,
-                        resource: face_decal,
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: Self::CAMERA_UNIFORM,
-                        resource: camera_uniform,
-                    },
-                ],
-            }
-        )
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("static_bind_group"),
+            layout: &self.layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: Self::FACE_DECAL,
+                    resource: face_decal,
+                },
+                wgpu::BindGroupEntry {
+                    binding: Self::CAMERA_UNIFORM,
+                    resource: camera_uniform,
+                },
+                wgpu::BindGroupEntry {
+                    binding: Self::LIGHTS_UNIFORM,
+                    resource: lights_uniform,
+                },
+            ],
+        })
     }
 }
 
@@ -78,8 +88,8 @@ impl FrameBindings {
     const CUBE_UNIFORM: u32 = 1;
 
     pub fn new(device: &wgpu::Device) -> Self {
-        let layout = device.create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor {
+        let layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("frame_bind_group_layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
@@ -94,8 +104,8 @@ impl FrameBindings {
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: Self::CUBE_UNIFORM,
-                        visibility: wgpu::ShaderStages::VERTEX |
-                            wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::VERTEX
+                            | wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -114,21 +124,19 @@ impl FrameBindings {
         blinky: wgpu::BindingResource,
         cube_uniform: wgpu::BindingResource,
     ) -> wgpu::BindGroup {
-        device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                label: Some("frame_bind_group"),
-                layout: &self.layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: Self::BLINKY_TEXTURE,
-                        resource: blinky,
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: Self::CUBE_UNIFORM,
-                        resource: cube_uniform,
-                    },
-                ],
-            }
-        )
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("frame_bind_group"),
+            layout: &self.layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: Self::BLINKY_TEXTURE,
+                    resource: blinky,
+                },
+                wgpu::BindGroupEntry {
+                    binding: Self::CUBE_UNIFORM,
+                    resource: cube_uniform,
+                },
+            ],
+        })
     }
 }

@@ -235,6 +235,8 @@ impl Renderable<CubeFaceAttributes, CubeFacePreparedData> for Cube {
             bytemuck::cast_slice(&[prepared.cube_uniform]),
         );
 
+        if false { return; }
+
         // Render Faces
 
         render_pass.set_vertex_buffer(0, self.face_vertex_buffer.slice(..));

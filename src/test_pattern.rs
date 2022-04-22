@@ -29,7 +29,8 @@ impl TestPattern {
         } else {
             self.frame_number += 1;
         }
-        self.write_row_column(self.frame_number, 255u8);
+        // self.write_row_column(self.frame_number, 255u8);
+        self.write_row_column(26, 255u8);
         &self.data
     }
 
