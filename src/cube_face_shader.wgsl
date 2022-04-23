@@ -64,10 +64,10 @@ fn vs_main(
         instance.face_to_cube_3,
     );
 
-    var pos: vec4<f32> = vec4<f32>(model.position, 1.0);
-    pos = face_to_cube * pos;
-    pos = cube.cube_to_world * pos;
-    pos = camera.view_proj * pos;
+    let model_pos: vec4<f32> = vec4<f32>(model.position, 1.0);
+    let cube_pos: vec4<f32> = face_to_cube * model_pos;
+    let world_pos = cube.cube_to_world * cube_pos;
+    let view_pos = camera.view_proj * world_pos;
 
     var normal: vec3<f32> = model.normal;
     let face_to_cube_normal = extract3x3(face_to_cube);
@@ -75,7 +75,8 @@ fn vs_main(
     normal = cube_to_world_normal * face_to_cube_normal * normal;
 
     var out: VertexOutput;
-    out.clip_position = pos;
+    out.clip_position = view_pos;
+    out.world_position = world_pos.xyz;
     out.normal = normal;
     out.decal_coords = instance.decal_offset + model.decal_coords;
     return out;

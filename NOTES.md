@@ -214,3 +214,11 @@ You can run wgpu programs under Xcode to use the Metal inspector.
 ### **[Developing and Debugging Metal Shaders](https://developer.apple.com/documentation/metal/developing_and_debugging_metal_shaders)**
 *Apple*
 Xcode has a very useful Metal debugging inspector.
+
+### **[Implementing Disney Principled BRDF in Arnold](https://web.archive.org/web/20170602195106/http://shihchin.com/2015/07/implementing-disney-principled-brdf-in.html)**
+*Shih-Chin, 2015*<br>
+[Source Repository](https://github.com/shihchinw/rlShaders)<br>
+[Dev Reel](https://vimeo.com/150344036)<br>
+
+### **[Advanced Lighting: Bloom](https://learnopengl.com/Advanced-Lighting/Bloom)**
+*Learn OpenGL*<br>

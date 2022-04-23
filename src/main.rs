@@ -9,6 +9,7 @@ mod binding;
 mod camera;
 mod cube;
 mod cube_model;
+mod floor;
 mod lights;
 mod test_pattern;
 mod texture;
@@ -143,10 +144,12 @@ struct State {
     lights: lights::Lights,     // ... buffalo buffalo buffalo...
     cube: cube::Cube,           // ... Buffalo buffalo.
     cube_trackball: trackball::Trackball,
+    floor: floor::Floor,        // Upstate bison upstate...
     test_pattern: test_pattern::TestPattern,
     blinky_texture: wgpu::Texture,
     cube_face_pipeline: wgpu::RenderPipeline,
     cube_edge_pipeline: wgpu::RenderPipeline,
+    floor_pipeline: wgpu::RenderPipeline,
     static_bind_group: wgpu::BindGroup,
     frame_bind_group: wgpu::BindGroup,
     first_frame_time: Option<std::time::Instant>,
@@ -239,6 +242,10 @@ impl State {
 
         let cube_trackball = trackball::Trackball::new(&size);
 
+        // Floor object
+
+        let floor = floor::Floor::new(&device, &queue);
+
         // Depth Texture
 
         let depth_texture = texture::Texture::create_depth_texture(
@@ -266,6 +273,8 @@ impl State {
             ),
             camera.uniform_buffer.as_entire_binding(),
             lights.uniform_buffer.as_entire_binding(),
+            floor.decal_resource(),
+            floor.decal_sampler_resource(),
         );
         let frame_bind_group = frame_bindings.create_bind_group(
             &device,
@@ -332,6 +341,34 @@ impl State {
             )
         };
 
+        let floor_pipeline = {
+            let layout =
+                device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("floor_pipeline_layout"),
+                    bind_group_layouts: &[
+                        &static_bindings.layout,
+                        &frame_bindings.layout,
+                    ],
+                    push_constant_ranges: &[],
+                });
+            let shader_text = include_str!("floor_shader.wgsl");
+            let shader = wgpu::ShaderModuleDescriptor {
+                label: Some("floor_shader"),
+                source: wgpu::ShaderSource::Wgsl(shader_text.into()),
+            };
+            create_render_pipeline(
+                "floor_pipeline",                       // label
+                &device,                                // device
+                &layout,                                // layout
+                config.format,                          // color_format
+                Some(texture::Texture::DEPTH_FORMAT),   // depth_format
+                &[                                      // vertex_layouts
+                    floor::FloorVertexRaw::desc(),
+                ],
+                shader,                                 // shader
+            )
+        };
+
         let first_frame_time = None;
 
         // Results
@@ -348,10 +385,12 @@ impl State {
             lights,
             cube,
             cube_trackball,
+            floor,
             test_pattern,
             blinky_texture,
             cube_face_pipeline,
             cube_edge_pipeline,
+            floor_pipeline,
             static_bind_group,
             frame_bind_group,
             first_frame_time,
@@ -425,6 +464,10 @@ impl State {
         let lights_prepared_data = self.lights.prepare(
             &lights::LightsAttributes {}
         );
+
+        let floor_prepared_data = self.floor.prepare(
+            &floor::FloorAttributes {}
+        );
         
         {
             let mut render_pass = encoder.begin_render_pass(
@@ -495,18 +538,28 @@ impl State {
                 &mut render_pass,
                 &lights_prepared_data,
             );
-            render_pass.set_pipeline(&self.cube_face_pipeline);
-            self.cube.render(
-                &self.queue,
-                &mut render_pass,
-                &cube_face_prepared_data,
-            );
+            if true {
+                render_pass.set_pipeline(&self.cube_face_pipeline);
+                self.cube.render(
+                    &self.queue,
+                    &mut render_pass,
+                    &cube_face_prepared_data,
+                );
+            }
             if true {
                 render_pass.set_pipeline(&self.cube_edge_pipeline);
                 self.cube.render(
                     &self.queue,
                     &mut render_pass,
                     &cube_edge_prepared_data,
+                );
+            }
+            if true {
+                render_pass.set_pipeline(&self.floor_pipeline);
+                self.floor.render(
+                    &self.queue,
+                    &mut render_pass,
+                    &floor_prepared_data,
                 );
             }
         }

@@ -7,6 +7,8 @@ impl StaticBindings {
     const FACE_DECAL: u32 = 0;
     const CAMERA_UNIFORM: u32 = 1;
     const LIGHTS_UNIFORM: u32 = 2;
+    const FLOOR_DECAL: u32 = 3;
+    const FLOOR_DECAL_SAMPLER: u32 = 4;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let layout =
@@ -46,6 +48,26 @@ impl StaticBindings {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: Self::FLOOR_DECAL,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float {
+                                filterable: true,
+                            },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: Self::FLOOR_DECAL_SAMPLER,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(
+                            wgpu::SamplerBindingType::Filtering,
+                        ),
+                        count: None,
+                    },
                 ],
             });
         Self { layout }
@@ -57,6 +79,8 @@ impl StaticBindings {
         face_decal: wgpu::BindingResource,
         camera_uniform: wgpu::BindingResource,
         lights_uniform: wgpu::BindingResource,
+        floor_decal: wgpu::BindingResource,
+        floor_decal_sampler: wgpu::BindingResource,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("static_bind_group"),
@@ -73,6 +97,14 @@ impl StaticBindings {
                 wgpu::BindGroupEntry {
                     binding: Self::LIGHTS_UNIFORM,
                     resource: lights_uniform,
+                },
+                wgpu::BindGroupEntry {
+                    binding: Self::FLOOR_DECAL,
+                    resource: floor_decal,
+                },
+                wgpu::BindGroupEntry {
+                    binding: Self::FLOOR_DECAL_SAMPLER,
+                    resource: floor_decal_sampler,
                 },
             ],
         })
