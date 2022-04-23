@@ -65,6 +65,7 @@ fn vs_main(
 
 // let material_color = vec4<f32>(0.718, 0.055, 0.0, 1.0);
 let material_color = vec4<f32>(0.05, 0.05, 0.05, 1.0);
+let material_roughness = 0.1;
 
 
 fn lambert_diffuse(
@@ -75,13 +76,31 @@ fn lambert_diffuse(
     return max(0.0, dot(normal, light_dir)) * light_color;
 }
 
+fn fifth(x: f32) -> f32 {
+    let square = x * x;
+    return square + square * x;
+}
+
+// fd = (baseColor / pi)
+//     * (1 + (FD90 - 1) * (1 - cos(θl))**5)
+//     * (1 + (FD90 - 1) * (1 - cos(θv))**5)
+// FD90 = 0.5 + 2 * roughness * cos(θd)**2
 fn burley_diffuse(
+    material_roughness: f32,
     normal: vec3<f32>,
     light_dir: vec3<f32>,
     view_dir: vec3<f32>,
+    half_dir: vec3<f32>,
     )
 -> f32 {
-    return 0.0;
+    let cos_theta_l = dot(light_dir, normal);
+    let cos_theta_v = dot(view_dir, normal);
+    let cos_theta_d = dot(light_dir, half_dir);
+    let fd90 = 0.5 + 2.0 * material_roughness * cos_theta_d * cos_theta_d;
+    let f1 = 1.0 / 3.1415927;
+    let f2 = 1.0 + (fd90 - 1.0) * fifth(1.0 - cos_theta_l);
+    let f3 = 1.0 + (fd90 - 1.0) * fifth(1.0 - cos_theta_v);
+    return f1 * f2 * f3;
 }
 
 fn phong_specular(
@@ -101,8 +120,8 @@ fn blinn_phong_specular(
     normal: vec3<f32>,
     light_dir: vec3<f32>,
     view_dir: vec3<f32>,
+    half_dir: vec3<f32>,
 ) -> vec3<f32> {
-    let half_dir = normalize(view_dir + light_dir);
     let specular_strength = pow(max(dot(normal, half_dir), 0.0), 32.0);
     let specular_color = specular_strength * light_color;
     return specular_color;
@@ -120,11 +139,24 @@ fn edge_color(
     // Directional lights
     for (var i = 1u; i < lights.count; i = i + 1u) {
         let light = lights.lights[i];
-        var light_dir = normalize(light.direction.xyz);
+        let light_dir = normalize(light.direction.xyz);
+        let half_dir = normalize(view_dir + light_dir);
 
-        let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
-        let specular =
-            blinn_phong_specular(light.color.rgb, normal, light_dir, view_dir);
+        // let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
+        let diffuse = burley_diffuse(
+            material_roughness,
+            normal,
+            light_dir,
+            view_dir,
+            half_dir,
+        );
+        let specular = blinn_phong_specular(
+            light.color.rgb,
+            normal,
+            light_dir,
+            view_dir,
+            half_dir,
+        );
         color = color + material_color.rgb * (diffuse + specular);
     }
     return vec4<f32>(color, material_color.a);
@@ -137,38 +169,4 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
 
     let color = edge_color(normal, view_dir);
     return color;
-    
-    // var color = vec3<f32>(0.0, 0.0, 0.0);
-    // for (var i = 0u; i < lights.count; i = i + 1u) {
-    //     let light = lights.lights[i];
-    //     var ambient = 0.0;
-    //     var diffuse = 0.0;
-    //     var light_has_direction = false;
-    //     var light_dir = vec3<f32>(0.0);
-    //     if (light.position.w == 0.0) {
-    //         if (light.direction.w == 0.0) {
-    //             // ambient light
-    //             ambient = 1.0;
-    //         } else {
-    //             // directional light
-    //             light_dir = light.direction.xyz;
-    //             light_has_direction = true;
-    //         }
-    //     } else {
-    //         light_dir = light.position.xyz - in.clip_position.xyz;
-    //         if (light.direction.w == 0.0) {
-    //             // point light
-    //         } else {
-    //             // spotlight
-    //         }
-    //     }
-
-    //     if (light_has_direction) {
-    //         light_dir = normalize(light_dir);
-    //         diffuse = lambert_diffuse(normal, light_dir);
-    //     }
-
-    //     color = color + (ambient + diffuse) * light.color.rgb;
-    // }
-    // return vec4<f32>(color, 1.0) * material_color;
 }

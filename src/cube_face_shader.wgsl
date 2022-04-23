@@ -89,8 +89,12 @@ var t_blinky: texture_2d<u32>;
 [[group(0), binding(0)]]
 var t_decal: texture_2d<f32>;
 
+let face_material_color: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
+let face_material_roughness: f32 = 0.6;
 let face_base_color: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
-let led_base_color: vec4<f32> = vec4<f32>(0.04, 0.04, 0.04, 1.0);
+// 0.06 is more realistic.  0.0 has higher contrast.
+// let led_base_color: vec4<f32> = vec4<f32>(0.06, 0.06, 0.06, 1.0);
+let led_base_color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
 let led_r2: f32 = 0.15;
 let led_bleed_r2: f32 = 0.20;
 
@@ -102,13 +106,31 @@ fn lambert_diffuse(
     return max(0.0, dot(normal, light_dir)) * light_color;
 }
 
+fn fifth(x: f32) -> f32 {
+    let square = x * x;
+    return square + square * x;
+}
+
+// fd = (baseColor / pi)
+//     * (1 + (FD90 - 1) * (1 - cos(θl))**5)
+//     * (1 + (FD90 - 1) * (1 - cos(θv))**5)
+// FD90 = 0.5 + 2 * roughness * cos(θd)**2
 fn burley_diffuse(
+    material_roughness: f32,
     normal: vec3<f32>,
     light_dir: vec3<f32>,
     view_dir: vec3<f32>,
+    half_dir: vec3<f32>,
     )
 -> f32 {
-    return 0.0;
+    let cos_theta_l = dot(light_dir, normal);
+    let cos_theta_v = dot(view_dir, normal);
+    let cos_theta_d = dot(light_dir, half_dir);
+    let fd90 = 0.5 + 2.0 * material_roughness * cos_theta_d * cos_theta_d;
+    let f1 = 1.0 / 3.1415927;
+    let f2 = 1.0 + (fd90 - 1.0) * fifth(1.0 - cos_theta_l);
+    let f3 = 1.0 + (fd90 - 1.0) * fifth(1.0 - cos_theta_v);
+    return f1 * f2 * f3;
 }
 
 fn phong_specular(
@@ -128,8 +150,8 @@ fn blinn_phong_specular(
     normal: vec3<f32>,
     light_dir: vec3<f32>,
     view_dir: vec3<f32>,
+    half_dir: vec3<f32>,
 ) -> vec3<f32> {
-    let half_dir = normalize(view_dir + light_dir);
     let specular_strength = pow(max(dot(normal, half_dir), 0.0), 32.0);
     let specular_color = specular_strength * light_color;
     return specular_color;
@@ -140,7 +162,8 @@ fn face_color(
     normal: vec3<f32>,
     view_dir: vec3<f32>,
 ) -> vec4<f32> {
-    let decal_pixel = vec4<f32>(textureLoad(t_decal, tex_index, 0));
+    var decal_pixel = vec4<f32>(textureLoad(t_decal, tex_index, 0));
+    decal_pixel = cube.decal_visibility * decal_pixel;
     var material_color = face_base_color.rgb;
     material_color = max(material_color, 2.0 * decal_pixel.rgb);
     var color = vec3<f32>(0.0);
@@ -151,11 +174,24 @@ fn face_color(
     // Directional lights
     for (var i = 1u; i < lights.count; i = i + 1u) {
         let light = lights.lights[i];
-        var light_dir = normalize(light.direction.xyz);
+        let light_dir = normalize(light.direction.xyz);
+        let half_dir = normalize(view_dir + light_dir);
 
-        let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
-        let specular =
-            blinn_phong_specular(light.color.rgb, normal, light_dir, view_dir);
+        // let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
+        let diffuse = burley_diffuse(
+            face_material_roughness,
+            normal,
+            light_dir,
+            view_dir,
+            half_dir,
+        );
+        let specular = blinn_phong_specular(
+            light.color.rgb,
+            normal,
+            light_dir,
+            view_dir,
+            half_dir,
+        );
         color = color + material_color * (diffuse + specular);
     }
     let alpha = face_base_color.a * decal_pixel.a;
@@ -168,6 +204,7 @@ fn led_color(
     let blinky_color = vec4<f32>(textureLoad(t_blinky, tex_index, 0)) / 255.0;
     let led_color = max(led_base_color, blinky_color);
     return led_color;
+    // return vec4<f32>(0., 0., 0., 1.);
 }
 
 [[stage(fragment)]]

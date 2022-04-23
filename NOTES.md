@@ -181,7 +181,7 @@ resources.
 ### **[Depth Precision Visualized](https://developer.nvidia.com/content/depth-precision-visualized)**
 *Nathan Reed, NVIDIA Developer Content*<br>
 Explains depth buffer resolution nonlinearities.
-Basically, Znear = 0 is best.  Znear = +1 (DirectX) or -1 (OpenGL)
+Basically, Zfar = 0 is best.  Zfar = +1 (DirectX) or -1 (OpenGL)
 significantly reduces a floating point Z buffer's linearity.
 
 ### **[Real-time Shadows](https://docs.google.com/presentation/d/1MwJcnSvkAzpT8BuoSqIkzlYLjdA_lBDrt8bW-vcwmDU/edit#slide=id.p)**
@@ -194,7 +194,10 @@ DOI:10.1109/TVCG.2004.1260772<br>
 
 ### **[Physically Based Shading at Disney](https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf)**
 *Brent Burley, Walt Disney Animation Studios*<br>
-Explains Disney Animation's PBR material model circa 2014.
+Explains Disney Animation's PBR material model in 2012.<br>
+[SIGGRAPH 2012 Course](https://web.archive.org/web/20170531155921/http://blog.selfshadow.com/publications/s2012-shading-course/)<br>
+[SIGGRAPH 2012 Slides](https://web.archive.org/web/20170531155921/http://blog.selfshadow.com/publications/s2012-shading-course/burley/s2012_pbs_disney_brdf_slides_v2.pdf)<br>
+[Disney BRDF Explorer](https://github.com/wdas/brdf)<br>
 
 ### **[Exponentially Better Rotations](https://thenumbat.github.io/Exponential-Rotations/)**
 *Max Slater*<br>
