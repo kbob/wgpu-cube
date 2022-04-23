@@ -16,7 +16,7 @@
  * move most of the event handling out of main.rs?
  * ~~convert trackball to use a quaternion instead of a matrix.~~
  * ~~get rid of the bindings::Bg struct.~~
- * add accessor functions to generate BindingResources
+ * ~~add accessor functions to generate BindingResources.~~
  * maybe create a module for shaders and pipelines?
  * move blinky into its own module.
  * only push camera and lights uniforms to GPU when they change.

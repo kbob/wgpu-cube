@@ -36,7 +36,7 @@ pub struct Camera {
     zfar: f32,
     world_hand: Hand,
 
-    pub uniform_buffer: wgpu::Buffer,
+    uniform_buffer: wgpu::Buffer,
 }
 
 impl Camera {
@@ -71,6 +71,11 @@ impl Camera {
             uniform_buffer,
         }
     }
+
+    pub fn uniform_resource(&self) -> wgpu::BindingResource {
+        self.uniform_buffer.as_entire_binding()
+    }
+
     pub fn set_aspect(&mut self, width: u32, height: u32) {
         self.aspect = width as f32 / height as f32;
     }

@@ -46,7 +46,7 @@ pub struct Cube {
     // Whole Cube Data
 
     cube_to_world: cgmath::Matrix4<f32>,
-    pub cube_uniform_buffer: wgpu::Buffer,
+    cube_uniform_buffer: wgpu::Buffer,
 
     // Face Data
 
@@ -55,7 +55,7 @@ pub struct Cube {
     face_vertex_buffer: wgpu::Buffer,
     face_vertex_index_count: u32,
     face_vertex_index_buffer: wgpu::Buffer,
-    pub face_decal_texture: texture::Texture,
+    face_decal_texture: texture::Texture,
 
     // Edge Data
 
@@ -185,6 +185,14 @@ impl Cube {
             edge_vertex_index_count,
             edge_vertex_index_buffer,
         }
+    }
+
+    pub fn uniform_resource(&self) -> wgpu::BindingResource {
+        self.cube_uniform_buffer.as_entire_binding()
+    }
+
+    pub fn face_decal_resource(&self) -> wgpu::BindingResource {
+        wgpu::BindingResource::TextureView(&self.face_decal_texture.view)
     }
 
     pub fn update_transform(&mut self, xform: &cgmath::Matrix4<f32>)

@@ -113,7 +113,7 @@ fn lights_to_raw(light_vec: &Vec<Light>) -> LightsUniformRaw {
 
 pub struct Lights {
     lights: Vec<Light>,
-    pub uniform_buffer: wgpu::Buffer,
+    uniform_buffer: wgpu::Buffer,
 }
 
 impl Lights {
@@ -145,6 +145,11 @@ impl Lights {
             uniform_buffer,
         }
     }
+
+    pub fn uniform_resource(&self) -> wgpu::BindingResource {
+        self.uniform_buffer.as_entire_binding()
+    }
+
     fn to_raw(&self) -> LightsUniformRaw {
         lights_to_raw(&self.lights)
     }

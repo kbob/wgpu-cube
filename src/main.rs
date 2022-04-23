@@ -268,18 +268,16 @@ impl State {
         let frame_bindings = binding::FrameBindings::new(&device);
         let static_bind_group = static_bindings.create_bind_group(
             &device,
-            wgpu::BindingResource::TextureView(
-                &cube.face_decal_texture.view,
-            ),
-            camera.uniform_buffer.as_entire_binding(),
-            lights.uniform_buffer.as_entire_binding(),
+            cube.face_decal_resource(),
+            camera.uniform_resource(),
+            lights.uniform_resource(),
             floor.decal_resource(),
             floor.decal_sampler_resource(),
         );
         let frame_bind_group = frame_bindings.create_bind_group(
             &device,
             wgpu::BindingResource::TextureView(&blinky_texture_view),
-            cube.cube_uniform_buffer.as_entire_binding(),
+            cube.uniform_resource(),
         );
 
         let cube_face_pipeline = {
@@ -446,6 +444,12 @@ impl State {
             }
         );
 
+        let camera_prepared_data = self.camera.prepare(
+            &camera::CameraAttributes {}
+        );
+        let lights_prepared_data = self.lights.prepare(
+            &lights::LightsAttributes {}
+        );
         let cube_face_prepared_data = self.cube.prepare(
             &cube::CubeFaceAttributes {
                 frame_time:
@@ -458,13 +462,6 @@ impl State {
         let cube_edge_prepared_data = self.cube.prepare(
             &cube::CubeEdgeAttributes {},
         );
-        let camera_prepared_data = self.camera.prepare(
-            &camera::CameraAttributes {}
-        );
-        let lights_prepared_data = self.lights.prepare(
-            &lights::LightsAttributes {}
-        );
-
         let floor_prepared_data = self.floor.prepare(
             &floor::FloorAttributes {}
         );
@@ -499,6 +496,7 @@ impl State {
             );
 
             if true {
+                // LED animation
                 self.queue.write_texture(
                     self.blinky_texture.as_image_copy(),
                     self.test_pattern.next_frame(),
@@ -539,6 +537,7 @@ impl State {
                 &lights_prepared_data,
             );
             if true {
+                // cube faces
                 render_pass.set_pipeline(&self.cube_face_pipeline);
                 self.cube.render(
                     &self.queue,
@@ -547,6 +546,7 @@ impl State {
                 );
             }
             if true {
+                // cube edges
                 render_pass.set_pipeline(&self.cube_edge_pipeline);
                 self.cube.render(
                     &self.queue,
@@ -555,6 +555,7 @@ impl State {
                 );
             }
             if true {
+                // floor
                 render_pass.set_pipeline(&self.floor_pipeline);
                 self.floor.render(
                     &self.queue,
