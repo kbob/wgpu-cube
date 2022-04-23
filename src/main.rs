@@ -6,6 +6,7 @@ use winit::{
 };
 
 mod binding;
+mod blinky;
 mod camera;
 mod cube;
 mod cube_model;
@@ -142,11 +143,10 @@ struct State {
     multisampled_framebuffer: wgpu::TextureView,
     camera: camera::Camera,     // Buffalo buffalo Buffalo...
     lights: lights::Lights,     // ... buffalo buffalo buffalo...
-    cube: cube::Cube,           // ... Buffalo buffalo.
+    blinky: blinky::Blinky,     // ... Buffalo buffalo.
+    cube: cube::Cube,           // Upstate bison upstate...
     cube_trackball: trackball::Trackball,
-    floor: floor::Floor,        // Upstate bison upstate...
-    test_pattern: test_pattern::TestPattern,
-    blinky_texture: wgpu::Texture,
+    floor: floor::Floor,        // ... bison baffle baffle...
     cube_face_pipeline: wgpu::RenderPipeline,
     cube_edge_pipeline: wgpu::RenderPipeline,
     floor_pipeline: wgpu::RenderPipeline,
@@ -210,31 +210,7 @@ impl State {
 
         // Blinky
 
-        let test_pattern = test_pattern::TestPattern::new();
-        let blinky_texture = device.create_texture(
-            &wgpu::TextureDescriptor {
-                label: Some("blinky_texture"),
-                size: wgpu::Extent3d {
-                    width: 6 * 64,
-                    height: 64,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Uint,
-                usage: (
-                    wgpu::TextureUsages::TEXTURE_BINDING |
-                    wgpu::TextureUsages::COPY_DST
-                )
-            }
-        );
-        let blinky_texture_view = blinky_texture.create_view(
-            &wgpu::TextureViewDescriptor {
-                label: Some("blinky_texture_view"),
-                ..Default::default()
-            }
-        );
+        let blinky = blinky::Blinky::new(&device);
 
         // Cube Object
 
@@ -276,7 +252,7 @@ impl State {
         );
         let frame_bind_group = frame_bindings.create_bind_group(
             &device,
-            wgpu::BindingResource::TextureView(&blinky_texture_view),
+            blinky.blinky_resource(),
             cube.uniform_resource(),
         );
 
@@ -381,11 +357,10 @@ impl State {
             multisampled_framebuffer,
             camera,
             lights,
+            blinky,
             cube,
             cube_trackball,
             floor,
-            test_pattern,
-            blinky_texture,
             cube_face_pipeline,
             cube_edge_pipeline,
             floor_pipeline,
@@ -427,6 +402,7 @@ impl State {
         let now = std::time::Instant::now();
         let cube_to_world = self.cube_trackball.orientation(now);
         self.cube.update_transform(&cube_to_world);
+        self.blinky.update();
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -449,6 +425,9 @@ impl State {
         );
         let lights_prepared_data = self.lights.prepare(
             &lights::LightsAttributes {}
+        );
+        let blinky_prepared_data = self.blinky.prepare(
+            &blinky::BlinkyAttributes {}
         );
         let cube_face_prepared_data = self.cube.prepare(
             &cube::CubeFaceAttributes {
@@ -495,23 +474,6 @@ impl State {
                 },
             );
 
-            if true {
-                // LED animation
-                self.queue.write_texture(
-                    self.blinky_texture.as_image_copy(),
-                    self.test_pattern.next_frame(),
-                    wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: std::num::NonZeroU32::new(6 * 64 * 4),
-                        rows_per_image: None,
-                    },
-                    wgpu::Extent3d {
-                        width: 6 * 64,
-                        height: 64,
-                        depth_or_array_layers: 1,
-                    },
-                );
-            }
 
             // Bind Groups
             //  0.  [Face Decal, Camera Uniform]
@@ -526,6 +488,15 @@ impl State {
                 &self.frame_bind_group,
                 &[],
             );
+
+            if true {
+                // LED animation
+                self.blinky.render(
+                    &self.queue,
+                    &mut render_pass,
+                    &blinky_prepared_data,
+                );
+            }
             self.camera.render(
                 &self.queue,
                 &mut render_pass,

@@ -33,7 +33,7 @@ impl TestPattern {
         &self.data
     }
 
-    pub fn _current_frame(&self) -> &PixelArray {
+    pub fn current_frame(&self) -> &PixelArray {
         &self.data
     }
 

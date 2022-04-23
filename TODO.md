@@ -2,7 +2,7 @@
 
 ## Bugs
 
- * Is the cube decal texture lifetime okay?
+ * ~~Is the cube decal texture lifetime okay?~~
  * Cube spins too fast at program startup.
 
 ## Cleanup and Organization
@@ -18,7 +18,7 @@
  * ~~get rid of the bindings::Bg struct.~~
  * ~~add accessor functions to generate BindingResources.~~
  * maybe create a module for shaders and pipelines?
- * move blinky into its own module.
+ * ~~move blinky into its own module.~~
  * only push camera and lights uniforms to GPU when they change.
 
 ## Features
