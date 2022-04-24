@@ -27,6 +27,12 @@ struct CubeUniform {
 [[group(1), binding(1)]]
 var<uniform> cube: CubeUniform;
 
+struct ShadowUniform {
+    proj: mat4x4<f32>;
+};
+[[group(2), binding(0)]]
+var<uniform> shadow: ShadowUniform;
+
 struct InstanceStaticInput {
     [[location(5)]] face_to_cube_0: vec4<f32>;
     [[location(6)]] face_to_cube_1: vec4<f32>;
@@ -80,6 +86,25 @@ fn vs_main(
     out.normal = normal;
     out.decal_coords = instance.decal_offset + model.decal_coords;
     return out;
+}
+
+[[stage(vertex)]]
+fn vs_shadow_main(
+    model: VertexInput,
+    instance: InstanceStaticInput,
+) -> [[builtin(position)]] vec4<f32> {
+    let face_to_cube = mat4x4<f32>(
+        instance.face_to_cube_0,
+        instance.face_to_cube_1,
+        instance.face_to_cube_2,
+        instance.face_to_cube_3,
+    );
+
+    let model_pos: vec4<f32> = vec4<f32>(model.position, 1.0);
+    let cube_pos: vec4<f32> = face_to_cube * model_pos;
+    let world_pos = cube.cube_to_world * cube_pos;
+    let proj_pos = shadow.proj * world_pos;
+    return proj_pos;
 }
 
 // Fragment shader

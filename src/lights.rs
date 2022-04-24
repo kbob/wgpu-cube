@@ -20,22 +20,27 @@ use crate::traits::Renderable;
 
 type _P3 = cgmath::Point3<f32>;
 type V3 = cgmath::Vector3<f32>;
+type M3 = cgmath::Matrix3<f32>;
 type M4 = cgmath::Matrix4<f32>;
 
-const MAX_LIGHTS: usize = 8;
+pub const MAX_LIGHTS: usize = 8;
 
 const _WORLD_BOUND_MIN: V3 = cgmath::vec3::<f32>(-100.0, -100.0, 100.0);
 const _WORLD_BOUND_MAX: V3 = cgmath::vec3::<f32>(100.0, 100.0, 1000.0);
-const _WORLD_BOUNDS: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
-    left: -100.0,
-    right: 100.0,
-    bottom: -100.0,
+const WORLD_BOUNDS: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
+    left: -260.0,
+    right: 510.0,
+    bottom: -101.0,
     top: 100.0,
-    near: 1000.0,
-    far: 100.0,
+    near: 100.0,
+    far: -600.0,
 };
 
-fn _round_up(n: usize, align: u32) -> usize {
+const SHADOW_MAP_SIZE: u32 = 512;
+const SHADOW_MAP_FORMAT: wgpu::TextureFormat =
+    wgpu::TextureFormat::Depth32Float;
+
+fn round_up(n: usize, align: u32) -> usize {
     let align = align as usize;
     (n + align - 1) / align * align
 }
@@ -55,6 +60,12 @@ struct LightsUniformRaw {
     count: u32,
     _padding: [u32; 3],
     lights: [LightRaw; MAX_LIGHTS],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
+struct ShadowUniformRaw {
+    proj: [[f32; 4]; 4],
 }
 
 enum Light {
@@ -92,6 +103,52 @@ impl Light {
             },
         }
     }
+    fn create_projection(&self) -> M4 {
+        match self {
+            Self::Ambient { .. } => M4::zero(),
+            Self::Directional { direction: dir, .. } => self.create_ortho(dir),
+        }
+    }
+
+    fn create_ortho(&self, dir: &V3) -> M4 {
+        // Find the minimal box aligned with dir that contains
+        // the 8 corners of the world.
+        let b = &WORLD_BOUNDS;
+        let pts = vec![
+            (b.left, b.bottom, b.far),
+            (b.left, b.bottom, b.near),
+            (b.left, b.top, b.far),
+            (b.left, b.top, b.near),
+            (b.right, b.bottom, b.far),
+            (b.right, b.bottom, b.near),
+            (b.right, b.top, b.far),
+            (b.right, b.top, b.near),
+        ];
+        let rotate = M3::look_to_rh(-*dir, V3::unit_y());
+        let empty_ortho = cgmath::Ortho::<f32> {
+            left: f32::MAX,
+            right: f32::MIN,
+            bottom: f32::MAX,
+            top: f32::MIN,
+            far: f32::MAX,
+            near: f32::MIN,
+        };
+        let light_bounds = pts.iter().fold(empty_ortho, |accum, item| {
+            let pt: V3 = (*item).into();
+            let pt: V3 = rotate * pt;
+            // println!("pt = {:?}", pt);
+            cgmath::Ortho::<f32> {
+                left: f32::min(accum.left, pt.x),
+                right: f32::max(accum.right, pt.x),
+                bottom: f32::min(accum.bottom, pt.y),
+                top: f32::max(accum.top, pt.y),
+                far: f32::min(accum.far, pt.z),
+                near: f32::max(accum.near, pt.z),
+            }
+        });
+        let proj: M4 = light_bounds.into();
+        proj
+    }
 }
 
 fn lights_to_raw(light_vec: &Vec<Light>) -> LightsUniformRaw {
@@ -113,7 +170,11 @@ fn lights_to_raw(light_vec: &Vec<Light>) -> LightsUniformRaw {
 
 pub struct Lights {
     lights: Vec<Light>,
-    uniform_buffer: wgpu::Buffer,
+    light_uniform_buffer: wgpu::Buffer,
+    shadow_uniform_buffer: wgpu::Buffer,
+    shadow_view: wgpu::TextureView,
+    shadow_sampler: wgpu::Sampler,
+    shadow_target_views: Vec<wgpu::TextureView>,
 }
 
 impl Lights {
@@ -132,7 +193,7 @@ impl Lights {
         assert!(lights.len() <= MAX_LIGHTS);
 
         let uniform_raw: LightsUniformRaw = lights_to_raw(&lights);
-        let uniform_buffer =
+        let light_uniform_buffer =
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("lights_uniform_buffer"),
                 contents: bytemuck::cast_slice(&[uniform_raw]),
@@ -140,14 +201,120 @@ impl Lights {
                     | wgpu::BufferUsages::UNIFORM,
             });
 
+        // Shadow Uniform Buffer
+
+        let shadow_uniform_buffer = {
+            let raw_size = std::mem::size_of::<ShadowUniformRaw>();
+            let min_align = device.limits().min_uniform_buffer_offset_alignment;
+            let aligned_size = round_up(raw_size, min_align);
+
+            let mut data = vec![0u8; aligned_size * lights.len()];
+
+            for (i, light) in lights.iter().enumerate() {
+                let proj = light.create_projection();
+                let offset = i * aligned_size;
+                let end = offset + raw_size;
+                *bytemuck::from_bytes_mut::<ShadowUniformRaw>(
+                    &mut data[offset..end],
+                ) = ShadowUniformRaw { proj: proj.into() };
+            }
+
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("shadow_proj_uniform_buffer"),
+                contents: bytemuck::cast_slice(&data),
+                usage: wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::UNIFORM,
+            })
+        };
+
+        let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("shadow_texture"),
+            size: wgpu::Extent3d {
+                width: SHADOW_MAP_SIZE,
+                height: SHADOW_MAP_SIZE,
+                depth_or_array_layers: lights.len() as u32,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: SHADOW_MAP_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+        });
+
+        let shadow_view =
+            shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("shadow_sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            compare: Some(wgpu::CompareFunction::GreaterEqual),
+            ..Default::default()
+        });
+
+        let shadow_target_views = (0..lights.len())
+            .map(|i| {
+                shadow_texture.create_view(&wgpu::TextureViewDescriptor {
+                    label: Some(&format!("light_shadow_view_{}", i)),
+                    format: None,
+                    dimension: Some(wgpu::TextureViewDimension::D2),
+                    aspect: wgpu::TextureAspect::All,
+                    base_mip_level: 0,
+                    mip_level_count: None,
+                    base_array_layer: i as u32,
+                    array_layer_count: std::num::NonZeroU32::new(1),
+                })
+            })
+            .collect::<Vec<_>>();
+
         Self {
             lights,
-            uniform_buffer,
+            light_uniform_buffer,
+            shadow_uniform_buffer,
+            shadow_view,
+            shadow_sampler,
+            shadow_target_views,
         }
     }
 
-    pub fn uniform_resource(&self) -> wgpu::BindingResource {
-        self.uniform_buffer.as_entire_binding()
+    pub fn light_uniform_resource(&self) -> wgpu::BindingResource {
+        self.light_uniform_buffer.as_entire_binding()
+    }
+
+    pub fn shadow_uniform_resource(&self) -> wgpu::BindingResource {
+        self.shadow_uniform_buffer.as_entire_binding()
+    }
+
+    pub fn shadow_maps_resource(&self) -> wgpu::BindingResource {
+        wgpu::BindingResource::TextureView(&self.shadow_view)
+    }
+
+    pub fn light_has_shadow(&self, light_index: usize) -> bool {
+        light_index < self.lights.len()
+            && match self.lights[light_index] {
+                Light::Ambient { .. } => false,
+                _ => true,
+            }
+    }
+
+    pub fn light_shadow_view(&self, light_index: usize) -> &wgpu::TextureView {
+        &self.shadow_target_views[light_index]
+    }
+
+    pub fn shadow_uniform_offset(
+        &self,
+        device: &wgpu::Device,
+        light_index: usize,
+    ) -> wgpu::DynamicOffset {
+        let raw_size = std::mem::size_of::<ShadowUniformRaw>();
+        let min_align = device.limits().min_uniform_buffer_offset_alignment;
+        let aligned_size = round_up(raw_size, min_align);
+        (aligned_size * light_index) as wgpu::DynamicOffset
     }
 
     fn to_raw(&self) -> LightsUniformRaw {
@@ -175,7 +342,7 @@ impl Renderable<LightsAttributes, LightsPreparedData> for Lights {
         prepared: &'rpass LightsPreparedData,
     ) {
         queue.write_buffer(
-            &self.uniform_buffer,
+            &self.light_uniform_buffer,
             0,
             bytemuck::cast_slice(&[prepared.lights_uniform]),
         );

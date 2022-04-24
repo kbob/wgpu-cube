@@ -27,6 +27,12 @@ struct CubeUniform {
 [[group(1), binding(1)]]
 var<uniform> cube: CubeUniform;
 
+struct ShadowUniform {
+    proj: mat4x4<f32>;
+};
+[[group(2), binding(0)]]
+var<uniform> shadow: ShadowUniform;
+
 struct VertexInput {
     [[location(0)]] position: vec3<f32>;
     [[location(1)]] normal: vec3<f32>;
@@ -39,7 +45,7 @@ struct VertexOutput {
 };
 
 fn extract3x3(in: mat4x4<f32>) -> mat3x3<f32> {
-    return mat3x3<f32>(in[0].xyz, in[1].xyz, in[2].xyz);
+    return mat3x3<f32>(in.x.xyz, in.y.xyz, in.z.xyz);
 }
 
 [[stage(vertex)]]
@@ -59,6 +65,16 @@ fn vs_main(
     out.world_position = world_pos.xyz;
     out.normal = normal;
     return out;
+}
+
+[[stage(vertex)]]
+fn vs_shadow_main(
+    model: VertexInput,
+) -> [[builtin(position)]] vec4<f32> {
+    var pos: vec4<f32> = vec4<f32>(model.position, 1.0);
+    let world_pos = cube.cube_to_world * pos;
+    pos = shadow.proj * world_pos;
+    return pos;
 }
 
 // Fragment shader

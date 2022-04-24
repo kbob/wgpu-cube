@@ -119,6 +119,7 @@ impl FrameBindings {
     pub const GROUP_INDEX: u32 = 1;
     const BLINKY_TEXTURE: u32 = 0;
     const CUBE_UNIFORM: u32 = 1;
+    const SHADOW_MAPS: u32 = 2;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let layout =
@@ -146,6 +147,16 @@ impl FrameBindings {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: Self::SHADOW_MAPS,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            sample_type: wgpu::TextureSampleType::Depth,
+                            view_dimension: wgpu::TextureViewDimension::D2Array,
+                        },
+                        count: None,
+                    },
                 ],
             });
         Self { layout }
@@ -154,8 +165,9 @@ impl FrameBindings {
     pub fn create_bind_group(
         &self,
         device: &wgpu::Device,
-        blinky: wgpu::BindingResource,
+        blinky_texture: wgpu::BindingResource,
         cube_uniform: wgpu::BindingResource,
+        shadow_maps: wgpu::BindingResource,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("frame_bind_group"),
@@ -163,13 +175,59 @@ impl FrameBindings {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: Self::BLINKY_TEXTURE,
-                    resource: blinky,
+                    resource: blinky_texture,
                 },
                 wgpu::BindGroupEntry {
                     binding: Self::CUBE_UNIFORM,
                     resource: cube_uniform,
                 },
+                wgpu::BindGroupEntry {
+                    binding: Self::SHADOW_MAPS,
+                    resource: shadow_maps,
+                },
             ],
+        })
+    }
+}
+
+pub struct PassBindings {
+    pub layout: wgpu::BindGroupLayout,
+}
+
+impl PassBindings {
+    pub const GROUP_INDEX: u32 = 2;
+    pub const SHADOW_UNIFORM: u32 = 0;
+
+    pub fn new(device: &wgpu::Device) -> Self {
+        let layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("pass_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: Self::SHADOW_UNIFORM,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+        Self { layout }
+    }
+
+    pub fn create_bind_group(
+        &self,
+        device: &wgpu::Device,
+        shadow_uniform: wgpu::BindingResource,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("pass_bind_group"),
+            layout: &self.layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: Self::SHADOW_UNIFORM,
+                resource: shadow_uniform,
+            }],
         })
     }
 }

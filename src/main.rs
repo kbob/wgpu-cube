@@ -45,7 +45,7 @@ fn create_render_pipeline(
     color_format: wgpu::TextureFormat,
     depth_format: Option<wgpu::TextureFormat>,
     vertex_layouts: &[wgpu::VertexBufferLayout],
-    shader: wgpu::ShaderModuleDescriptor,
+    shader: &wgpu::ShaderModuleDescriptor,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(&shader);
 
@@ -152,6 +152,7 @@ struct State {
     floor_pipeline: wgpu::RenderPipeline,
     static_bind_group: wgpu::BindGroup,
     frame_bind_group: wgpu::BindGroup,
+    pass_bind_group: wgpu::BindGroup,
     first_frame_time: Option<std::time::Instant>,
 }
 
@@ -242,11 +243,12 @@ impl State {
 
         let static_bindings = binding::StaticBindings::new(&device);
         let frame_bindings = binding::FrameBindings::new(&device);
+        let pass_bindings = binding::PassBindings::new(&device);
         let static_bind_group = static_bindings.create_bind_group(
             &device,
             cube.face_decal_resource(),
             camera.uniform_resource(),
-            lights.uniform_resource(),
+            lights.light_uniform_resource(),
             floor.decal_resource(),
             floor.decal_sampler_resource(),
         );
@@ -254,7 +256,25 @@ impl State {
             &device,
             blinky.blinky_resource(),
             cube.uniform_resource(),
+            lights.shadow_maps_resource(),
         );
+        let pass_bind_group = pass_bindings.create_bind_group(
+            &device,
+            lights.shadow_uniform_resource(),
+        );
+
+        // Shaders
+
+        let cube_face_shader = wgpu::include_wgsl!("cube_face_shader.wgsl");
+        let cube_edge_shader = wgpu::include_wgsl!("cube_edge_shader.wgsl");
+        let floor_shader = wgpu::include_wgsl!("floor_shader.wgsl");
+
+
+        // let shadow_pipeline = {
+        //     shader_module
+        //     
+        //     create_render_pipeline(...)
+        // };
 
         let cube_face_pipeline = {
             let layout = device.create_pipeline_layout(
@@ -267,11 +287,6 @@ impl State {
                     push_constant_ranges: &[],
                 }
             );
-            let shader_text = include_str!("cube_face_shader.wgsl");
-            let shader = wgpu::ShaderModuleDescriptor {
-                label: Some("cube_face_shader"),
-                source: wgpu::ShaderSource::Wgsl(shader_text.into()),
-            };
             create_render_pipeline(
                 "cube_face_pipeline",                   // label
                 &device,                                // device
@@ -282,7 +297,7 @@ impl State {
                     cube_model::FaceVertex::desc(),
                     cube::FaceStaticInstanceRaw::desc(),
                 ],
-                shader,                                 // shader
+                &cube_face_shader,                      // shader
             )
         };
 
@@ -297,11 +312,6 @@ impl State {
                     push_constant_ranges: &[],
                 }
             );
-            let shader_text = include_str!("cube_edge_shader.wgsl");
-            let shader = wgpu::ShaderModuleDescriptor {
-                label: Some("cube_edge_shader"),
-                source: wgpu::ShaderSource::Wgsl(shader_text.into()),
-            };
             create_render_pipeline(
                 "cube_edge_pipeline",                   // label
                 &device,                                // device
@@ -311,7 +321,7 @@ impl State {
                 &[                                      // vertex_layouts
                     cube_model::EdgeVertex::desc(),
                 ],
-                shader,                                 // shader
+                &cube_edge_shader,                      // shader
             )
         };
 
@@ -325,11 +335,6 @@ impl State {
                     ],
                     push_constant_ranges: &[],
                 });
-            let shader_text = include_str!("floor_shader.wgsl");
-            let shader = wgpu::ShaderModuleDescriptor {
-                label: Some("floor_shader"),
-                source: wgpu::ShaderSource::Wgsl(shader_text.into()),
-            };
             create_render_pipeline(
                 "floor_pipeline",                       // label
                 &device,                                // device
@@ -339,7 +344,33 @@ impl State {
                 &[                                      // vertex_layouts
                     floor::FloorVertexRaw::desc(),
                 ],
-                shader,                                 // shader
+                &floor_shader,                          // shader
+            )
+        };
+
+        let cube_face_shadow_pipeline = {
+            let layout = device.create_pipeline_layout(
+                &wgpu::PipelineLayoutDescriptor {
+                    label: Some("cube_face_shadow_pipeline"),
+                    bind_group_layouts: &[
+                        &static_bindings.layout,
+                        &frame_bindings.layout,
+                        &pass_bindings.layout,
+                    ],
+                    push_constant_ranges: &[],
+                }
+            );
+            create_render_pipeline(
+                "cube_face_shadow_pipeline",            // label
+                &device,                                // device
+                &layout,                                // layout
+                config.format,                          // color_format
+                Some(texture::Texture::DEPTH_FORMAT),   // depth_format
+                &[                                      // vertex_layouts
+                    cube_model::FaceVertex::desc(),
+                    cube::FaceStaticInstanceRaw::desc(),
+                ],
+                &cube_face_shader,                      // shader
             )
         };
 
@@ -366,6 +397,7 @@ impl State {
             floor_pipeline,
             static_bind_group,
             frame_bind_group,
+            pass_bind_group,
             first_frame_time,
         }
     }
@@ -444,8 +476,22 @@ impl State {
         let floor_prepared_data = self.floor.prepare(
             &floor::FloorAttributes {}
         );
-        
+
+        // Shadow Passes
         {
+            // for each light:
+            //     begin render pass
+            //     set pipeline
+            //     set bind groups for light
+            //     render cube faces, cube edges, floor
+            //     (drop render pass at end of scope)
+        }
+        
+        // Forward Render Pass
+        {
+            // Inner scope ensures prepared data above outlives
+            // the render pass.
+
             let mut render_pass = encoder.begin_render_pass(
                 &wgpu::RenderPassDescriptor {
                     label: Some("render_pass"),
@@ -473,7 +519,6 @@ impl State {
                     ),
                 },
             );
-
 
             // Bind Groups
             //  0.  [Face Decal, Camera Uniform]
