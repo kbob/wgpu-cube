@@ -205,14 +205,13 @@ fn led_color(
     let blinky_color = vec4<f32>(textureLoad(t_blinky, tex_index, 0)) / 255.0;
     let led_color = max(led_base_color, blinky_color);
     return led_color;
-    // return vec4<f32>(0., 0., 0., 1.);
 }
 
 [[stage(fragment)]]
 fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
     let pix_coord = t_coord * 64.0;
-    let pix_center = round(pix_coord);
+    let pix_center = floor(pix_coord) + 0.5;
     let tex_index = vec2<i32>(pix_center);
 
     let normal = normalize(in.normal);
