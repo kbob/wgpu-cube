@@ -4,6 +4,17 @@ use wgpu::util::DeviceExt;
 use crate::traits::Renderable;
 use crate::Hand;
 
+#[allow(dead_code)]
+type P3 = cgmath::Point3<f32>;
+#[allow(dead_code)]
+type V3 = cgmath::Vector3<f32>;
+#[allow(dead_code)]
+type V4 = cgmath::Vector4<f32>;
+#[allow(dead_code)]
+type M3 = cgmath::Matrix3<f32>;
+#[allow(dead_code)]
+type M4 = cgmath::Matrix4<f32>;
+
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0,  0.0,  0.0,  0.0,
@@ -80,6 +91,9 @@ impl Camera {
         self.aspect = width as f32 / height as f32;
     }
 
+    #[allow(unused_variables, unused_assignments)]
+    #[allow(dead_code)]
+    #[allow(unreachable_code)]
     fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
         let proj = cgmath::perspective(
@@ -92,7 +106,47 @@ impl Camera {
             Hand::Left => LEFT_HAND_TO_WGPU_MATRIX,
             Hand::Right => OPENGL_TO_WGPU_MATRIX,
         };
-        convert * proj * view
+
+        return convert * proj * view;
+        
+        // HACK HACK HACK
+    
+        let world_bounds: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
+            left: -500.0,
+            right: 370.0,
+            bottom: -270.0,
+            top: 250.0,
+            near: 1300.0,
+            far: -180.0,
+        };
+        let world_bounds: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
+            left: -120.0,
+            right: 120.0,
+            bottom: -120.0,
+            top: 120.0,
+            // near: 1300.0,
+            // far: -180.0,
+            near: -1800.0,
+            far: 1300.0,
+        };
+        let wbo: M4 = world_bounds.into();
+
+        const CORRECTION: M4 = M4::from_cols(
+            V4::new(1.0, 0.0, 0.0, 0.0),
+            V4::new(0.0, 1.0, 0.0, 0.0),
+            V4::new(0.0, 0.0, -1.0, 0.0),
+            V4::new(0.0, 0.0, 1.0, 1.0),
+        );
+
+        let dir = V3::new(-1.0, 1.0, 1.0);
+
+        let mut proj: M4 = M4::identity();
+
+        proj = M4::look_to_rh(P3::origin(), -dir, V3::unit_y()) * proj;
+        proj = wbo * proj;
+        proj = CORRECTION * proj;
+        proj
+
     }
 }
 

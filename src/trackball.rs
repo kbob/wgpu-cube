@@ -72,6 +72,7 @@ impl Trackball {
                     Rad::<f32>(std::f32::consts::PI / 512.0),
                 )
             ),
+            // rot_per_dt: None,
             drag_dt: Duration::new(0, 1_000_000_000 / 60),
             prev_orientation_time: now,
 

@@ -39,7 +39,7 @@ impl FaceVertex {
         let stride = std::mem::size_of::<Self>();
         assert!(stride % wgpu::VERTEX_STRIDE_ALIGNMENT as usize == 0);
         wgpu::VertexBufferLayout {
-            array_stride: stride as wgpu::BufferAddress,
+            array_stride: stride as _,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &Self::ATTRIBUTES,
         }
@@ -62,7 +62,7 @@ impl EdgeVertex {
         let stride = std::mem::size_of::<Self>();
         assert!(stride % wgpu::VERTEX_STRIDE_ALIGNMENT as usize == 0);
         wgpu::VertexBufferLayout {
-            array_stride: stride as wgpu::BufferAddress,
+            array_stride: stride as _,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &Self::ATTRIBUTES,
         }

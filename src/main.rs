@@ -22,9 +22,10 @@ use trackball::{
     Responder,
 };
 
-const BACKFACE_CULL: bool = true;
+const BACKFACE_CULL: bool = false;
 const ALPHA_BLENDING: bool = false;
 const SAMPLE_COUNT: u32 = 4;
+const PRINT_FPS: bool = false;
 
 #[allow(dead_code)]
 #[derive(PartialEq)]
@@ -38,7 +39,13 @@ const BACKGROUND_COLOR: wgpu::Color = wgpu::Color {
     r: 0.00250, g: 0.00625, b: 0.01500, a: 1.0,
 };
 
-fn create_render_pipeline(
+const SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+pub fn print_type_of<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>());
+}
+
+fn create_forward_render_pipeline(
     label: &str,
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
@@ -47,7 +54,7 @@ fn create_render_pipeline(
     vertex_layouts: &[wgpu::VertexBufferLayout],
     shader: &wgpu::ShaderModuleDescriptor,
 ) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(&shader);
+    let shader = device.create_shader_module(shader);
 
     device.create_render_pipeline(
         &wgpu::RenderPipelineDescriptor {
@@ -108,6 +115,53 @@ fn create_render_pipeline(
     )
 }
 
+fn create_shadow_render_pipeline(
+    label: &str,
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    vertex_layouts: &[wgpu::VertexBufferLayout],
+    shader: &wgpu::ShaderModuleDescriptor,
+) -> wgpu::RenderPipeline {
+    let shader = device.create_shader_module(shader);
+
+    device.create_render_pipeline(
+        &wgpu::RenderPipelineDescriptor {
+            label: Some(label),
+            layout: Some(layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_shadow_main",
+                buffers: vertex_layouts,
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                // cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: SHADOW_FORMAT,
+                depth_write_enabled: true,
+                // N.B. Shadow worlds are always right-handed.
+                depth_compare: wgpu::CompareFunction::Greater,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: 2, // corresponds to bilinear filtering
+                    slope_scale: 2.0,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            fragment: None,
+            multiview: None,
+        }
+    )
+}
+
 fn create_multisampled_framebuffer(
     device: &wgpu::Device,
     config: &wgpu::SurfaceConfiguration,
@@ -147,12 +201,16 @@ struct State {
     cube: cube::Cube,           // Upstate bison upstate...
     cube_trackball: trackball::Trackball,
     floor: floor::Floor,        // ... bison baffle baffle...
-    cube_face_pipeline: wgpu::RenderPipeline,
-    cube_edge_pipeline: wgpu::RenderPipeline,
-    floor_pipeline: wgpu::RenderPipeline,
+    cube_face_forward_pipeline: wgpu::RenderPipeline,
+    cube_edge_forward_pipeline: wgpu::RenderPipeline,
+    floor_forward_pipeline: wgpu::RenderPipeline,
+    cube_face_shadow_pipeline: wgpu::RenderPipeline,
+    cube_edge_shadow_pipeline: wgpu::RenderPipeline,
+    floor_shadow_pipeline: wgpu::RenderPipeline,
     static_bind_group: wgpu::BindGroup,
     frame_bind_group: wgpu::BindGroup,
-    pass_bind_group: wgpu::BindGroup,
+    shadow_pass_bind_group: wgpu::BindGroup,
+    forward_pass_bind_group: wgpu::BindGroup,
     first_frame_time: Option<std::time::Instant>,
 }
 
@@ -243,7 +301,8 @@ impl State {
 
         let static_bindings = binding::StaticBindings::new(&device);
         let frame_bindings = binding::FrameBindings::new(&device);
-        let pass_bindings = binding::PassBindings::new(&device);
+        let forward_pass_bindings = binding::ForwardPassBindings::new(&device);
+        let shadow_pass_bindings = binding::ShadowPassBindings::new(&device);
         let static_bind_group = static_bindings.create_bind_group(
             &device,
             cube.face_decal_resource(),
@@ -256,9 +315,13 @@ impl State {
             &device,
             blinky.blinky_resource(),
             cube.uniform_resource(),
-            lights.shadow_maps_resource(),
         );
-        let pass_bind_group = pass_bindings.create_bind_group(
+        let forward_pass_bind_group = forward_pass_bindings.create_bind_group(
+            &device,
+            lights.shadow_maps_resource(),
+            lights.shadow_maps_sampler_resource(),
+        );
+        let shadow_pass_bind_group = shadow_pass_bindings.create_bind_group(
             &device,
             lights.shadow_uniform_resource(),
         );
@@ -269,26 +332,20 @@ impl State {
         let cube_edge_shader = wgpu::include_wgsl!("cube_edge_shader.wgsl");
         let floor_shader = wgpu::include_wgsl!("floor_shader.wgsl");
 
-
-        // let shadow_pipeline = {
-        //     shader_module
-        //     
-        //     create_render_pipeline(...)
-        // };
-
-        let cube_face_pipeline = {
+        let cube_face_forward_pipeline = {
             let layout = device.create_pipeline_layout(
                 &wgpu::PipelineLayoutDescriptor {
-                    label: Some("cube_face_pipeline_layout"),
+                    label: Some("cube_face_forward_pipeline_layout"),
                     bind_group_layouts: &[
                         &static_bindings.layout,
                         &frame_bindings.layout,
+                        &forward_pass_bindings.layout,
                     ],
                     push_constant_ranges: &[],
                 }
             );
-            create_render_pipeline(
-                "cube_face_pipeline",                   // label
+            create_forward_render_pipeline(
+                "cube_face_forward_pipeline",           // label
                 &device,                                // device
                 &layout,                                // layout
                 config.format,                          // color_format
@@ -301,19 +358,20 @@ impl State {
             )
         };
 
-        let cube_edge_pipeline = {
+        let cube_edge_forward_pipeline = {
             let layout = device.create_pipeline_layout(
                 &wgpu::PipelineLayoutDescriptor {
-                    label: Some("cube_edge_pipeline_layout"),
+                    label: Some("cube_edge_forward_pipeline_layout"),
                     bind_group_layouts: &[
                         &static_bindings.layout,
                         &frame_bindings.layout,
+                        &forward_pass_bindings.layout,
                     ],
                     push_constant_ranges: &[],
                 }
             );
-            create_render_pipeline(
-                "cube_edge_pipeline",                   // label
+            create_forward_render_pipeline(
+                "cube_edge_forward_pipeline",           // label
                 &device,                                // device
                 &layout,                                // layout
                 config.format,                          // color_format
@@ -325,18 +383,19 @@ impl State {
             )
         };
 
-        let floor_pipeline = {
+        let floor_forward_pipeline = {
             let layout =
                 device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("floor_pipeline_layout"),
+                    label: Some("floor_forward_pipeline_layout"),
                     bind_group_layouts: &[
                         &static_bindings.layout,
                         &frame_bindings.layout,
+                        &forward_pass_bindings.layout,
                     ],
                     push_constant_ranges: &[],
                 });
-            create_render_pipeline(
-                "floor_pipeline",                       // label
+            create_forward_render_pipeline(
+                "floor_forward_pipeline",               // label
                 &device,                                // device
                 &layout,                                // layout
                 config.format,                          // color_format
@@ -355,22 +414,66 @@ impl State {
                     bind_group_layouts: &[
                         &static_bindings.layout,
                         &frame_bindings.layout,
-                        &pass_bindings.layout,
+                        &shadow_pass_bindings.layout,
                     ],
                     push_constant_ranges: &[],
                 }
             );
-            create_render_pipeline(
+            create_shadow_render_pipeline(
                 "cube_face_shadow_pipeline",            // label
                 &device,                                // device
                 &layout,                                // layout
-                config.format,                          // color_format
-                Some(texture::Texture::DEPTH_FORMAT),   // depth_format
                 &[                                      // vertex_layouts
                     cube_model::FaceVertex::desc(),
                     cube::FaceStaticInstanceRaw::desc(),
                 ],
                 &cube_face_shader,                      // shader
+            )
+        };
+
+        let cube_edge_shadow_pipeline = {
+            let layout = device.create_pipeline_layout(
+                &wgpu::PipelineLayoutDescriptor {
+                    label: Some("cube_edge_shadow_pipeline"),
+                    bind_group_layouts: &[
+                        &static_bindings.layout,
+                        &frame_bindings.layout,
+                        &shadow_pass_bindings.layout,
+                    ],
+                    push_constant_ranges: &[],
+                }
+            );
+            create_shadow_render_pipeline(
+                "cube_edge_shadow_pipeline",            // label
+                &device,                                // device
+                &layout,                                // layout
+                &[                                      // vertex_layouts
+                    cube_model::EdgeVertex::desc(),
+                ],
+                &cube_edge_shader,                      // shader
+            )
+        };
+
+        let floor_shadow_pipeline = {
+            let layout = device.create_pipeline_layout(
+                &wgpu::PipelineLayoutDescriptor {
+                    label: Some("floor_shadow_pipeline"),
+                    bind_group_layouts: &[
+                        &static_bindings.layout,
+                        &frame_bindings.layout,
+                        &shadow_pass_bindings.layout,
+                    ],
+                    push_constant_ranges: &[],
+                }
+            );
+            create_shadow_render_pipeline(
+                "floor_shadow_pipeline",                // label
+                &device,                                // device
+                &layout,                                // layout
+                &[                                      // vertex_layouts
+                    floor::FloorVertexRaw::desc(),
+                ],
+                &floor_shader,                          // shader
             )
         };
 
@@ -392,12 +495,16 @@ impl State {
             cube,
             cube_trackball,
             floor,
-            cube_face_pipeline,
-            cube_edge_pipeline,
-            floor_pipeline,
+            cube_face_forward_pipeline,
+            cube_edge_forward_pipeline,
+            floor_forward_pipeline,
+            cube_face_shadow_pipeline,
+            cube_edge_shadow_pipeline,
+            floor_shadow_pipeline,
             static_bind_group,
             frame_bind_group,
-            pass_bind_group,
+            forward_pass_bind_group,
+            shadow_pass_bind_group,
             first_frame_time,
         }
     }
@@ -448,7 +555,7 @@ impl State {
         );
         let mut encoder = self.device.create_command_encoder(
             &wgpu::CommandEncoderDescriptor {
-                label: Some("encoder"),
+                label: Some("arthur_the_encoder"),
             }
         );
 
@@ -487,6 +594,73 @@ impl State {
             //     (drop render pass at end of scope)
         }
         
+        for light_index in 0..lights::MAX_LIGHTS {
+            if !self.lights.light_has_shadow(light_index) {
+                continue;
+            }
+            let label = &format!("shadow_{}_render_pass", light_index);
+            let mut shadow_pass = encoder.begin_render_pass(
+                &wgpu::RenderPassDescriptor {
+                    label: Some(label),
+                    // label: &format!("shadow_{}_render_pass", light_index),
+                    color_attachments: &[],
+                    depth_stencil_attachment: Some(
+                        wgpu::RenderPassDepthStencilAttachment {
+                            view:
+                                self.lights.light_shadow_view(light_index),
+                            depth_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(0.0),
+                                store: true,
+                            }),
+                            stencil_ops: None,
+                        }
+                    ),
+                }
+            );
+            shadow_pass.set_bind_group(
+                binding::StaticBindings::GROUP_INDEX,
+                &self.static_bind_group,
+                &[],
+            );
+            shadow_pass.set_bind_group(
+                binding::FrameBindings::GROUP_INDEX,
+                &self.frame_bind_group,
+                &[],
+            );
+            shadow_pass.set_bind_group(
+                binding::ShadowPassBindings::GROUP_INDEX,
+                &self.shadow_pass_bind_group,
+                &[self.lights.shadow_uniform_offset(&self.device, light_index)],
+            );
+            if true {
+                // record face shadows
+                shadow_pass.set_pipeline(&self.cube_face_shadow_pipeline);
+                self.cube.render(
+                    &self.queue,
+                    &mut shadow_pass,
+                    &cube_face_prepared_data,
+                );
+            }
+            if true {
+                // record edge shadows
+                shadow_pass.set_pipeline(&self.cube_edge_shadow_pipeline);
+                self.cube.render(
+                    &self.queue,
+                    &mut shadow_pass,
+                    &cube_edge_prepared_data,
+                );
+            }
+            if false {
+                // record floor shadows
+                shadow_pass.set_pipeline(&self.floor_shadow_pipeline);
+                self.floor.render(
+                    &self.queue,
+                    &mut shadow_pass,
+                    &floor_prepared_data,
+                );
+            }
+        }
+
         // Forward Render Pass
         {
             // Inner scope ensures prepared data above outlives
@@ -520,9 +694,6 @@ impl State {
                 },
             );
 
-            // Bind Groups
-            //  0.  [Face Decal, Camera Uniform]
-            //  1.  [Blinky Texture, Cube Uniform]
             render_pass.set_bind_group(
                 binding::StaticBindings::GROUP_INDEX,
                 &self.static_bind_group,
@@ -531,6 +702,11 @@ impl State {
             render_pass.set_bind_group(
                 binding::FrameBindings::GROUP_INDEX,
                 &self.frame_bind_group,
+                &[],
+            );
+            render_pass.set_bind_group(
+                binding::ForwardPassBindings::GROUP_INDEX,
+                &self.forward_pass_bind_group,
                 &[],
             );
 
@@ -554,7 +730,7 @@ impl State {
             );
             if true {
                 // cube faces
-                render_pass.set_pipeline(&self.cube_face_pipeline);
+                render_pass.set_pipeline(&self.cube_face_forward_pipeline);
                 self.cube.render(
                     &self.queue,
                     &mut render_pass,
@@ -563,7 +739,7 @@ impl State {
             }
             if true {
                 // cube edges
-                render_pass.set_pipeline(&self.cube_edge_pipeline);
+                render_pass.set_pipeline(&self.cube_edge_forward_pipeline);
                 self.cube.render(
                     &self.queue,
                     &mut render_pass,
@@ -572,7 +748,7 @@ impl State {
             }
             if true {
                 // floor
-                render_pass.set_pipeline(&self.floor_pipeline);
+                render_pass.set_pipeline(&self.floor_forward_pipeline);
                 self.floor.render(
                     &self.queue,
                     &mut render_pass,
@@ -614,10 +790,12 @@ impl Stats {
         if dur.as_secs() >= 1 {
             if self.prev_frame_count != 0 {
                 let n = self.frame_count - self.prev_frame_count;
-                println!(
-                    "{0:.2} frames/second",
-                    n as f64 / dur.as_secs_f64(),
-                );
+                if PRINT_FPS {
+                    println!(
+                        "{0:.2} frames/second",
+                        n as f64 / dur.as_secs_f64(),
+                    );
+                }
             }
             self.prev_time = now;
             self.prev_frame_count = self.frame_count;

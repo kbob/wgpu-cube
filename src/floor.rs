@@ -2,14 +2,16 @@ use crate::texture;
 use crate::traits::Renderable;
 use wgpu::util::DeviceExt;
 
-const FLOOR_HEIGHT: f32 = -100.0;
+const FLOOR_HEIGHT: f32 = -120.0;
+const FLOOR_WIDTH: f32 = 750.0;
+const FLOOR_LENGTH: f32 = 750.0;
 const FLOOR_BOUNDS: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
-    left: -250.0,
-    right: 500.0,
-    bottom: -100.0,
-    top: -100.0,
+    left: 60.0 - FLOOR_WIDTH / 2.0,
+    right: 60.0 + FLOOR_WIDTH / 2.0,
+    bottom: FLOOR_HEIGHT,
+    top: FLOOR_HEIGHT,
     near: 150.0,
-    far: -600.0,
+    far:  150.0 - FLOOR_LENGTH,
 };
 
 #[repr(C)]

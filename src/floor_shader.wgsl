@@ -34,7 +34,7 @@ struct VertexInput {
 
 struct VertexOutput {
     [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(0), interpolate(perspective, sample)]] world_position: vec3<f32>;
+    [[location(0), interpolate(perspective, sample)]] world_position: vec4<f32>;
     [[location(1), interpolate(perspective, sample)]] normal: vec3<f32>;
     [[location(2), interpolate(perspective, sample)]] decal_coords: vec2<f32>;
 };
@@ -50,7 +50,7 @@ fn vs_main(
 
     var out: VertexOutput;
     out.clip_position = view_pos;
-    out.world_position = world_pos.xyz;
+    out.world_position = world_pos;
     out.normal = normal;
     out.decal_coords = model.decal_coords;
     return out;
@@ -71,6 +71,11 @@ fn vs_shadow_main(
 var t_floor_decal: texture_2d<f32>;
 [[group(0), binding(4)]]
 var s_floor_decal: sampler;
+
+[[group(2), binding(0)]]
+var t_shadow_maps: texture_depth_2d_array;
+[[group(2), binding(1)]]
+var s_shadow_maps: sampler_comparison;
 
 // No base material color.  It comes from the decal texture.
 let material_roughness: f32 = 0.6;
@@ -134,13 +139,29 @@ fn blinn_phong_specular(
     return specular_color;
 }
 
+fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
+    if (homogeneous_coords.w <= 0.0) {
+        return 1.0;
+    }
+    // compensate for the Y-flip difference between the NDC and texture coordinates
+    let flip_correction = vec2<f32>(0.5, -0.5);
+    // compute texture coordinates for shadow lookup
+    let proj_correction = 1.0 / homogeneous_coords.w;
+    let light_local = homogeneous_coords.xy * flip_correction * proj_correction + vec2<f32>(0.5, 0.5);
+    // do the lookup, using HW PCF and comparison
+    return textureSampleCompareLevel(t_shadow_maps, s_shadow_maps, light_local, i32(light_id), homogeneous_coords.z * proj_correction);
+}
+
 fn floor_color(
     tex_coord: vec2<f32>,
     normal: vec3<f32>,
     view_dir: vec3<f32>,
+    world_pos: vec4<f32>,
 ) -> vec4<f32> {
     let material_color =
         textureSample(t_floor_decal, s_floor_decal, tex_coord).rgb * 0.3;
+    // let depth = textureSample(t_shadow_maps, s_shadow_maps, tex_coord, 1);
+    // let material_color = vec3<f32>(depth);
 
     var color = vec3<f32>(0.0);
 
@@ -152,6 +173,9 @@ fn floor_color(
         let light = lights.lights[i];
         let light_dir = normalize(light.direction.xyz);
         let half_dir = normalize(view_dir + light_dir);
+
+        let shadow = fetch_shadow(i, light.proj * world_pos);
+        // let shadow = 1.0;
 
         // let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
         let diffuse = burley_diffuse(
@@ -168,7 +192,7 @@ fn floor_color(
             view_dir,
             half_dir,
         );
-        color = color + material_color * (diffuse + specular);
+        color = color + material_color * shadow * (diffuse + specular);
     }
     return vec4<f32>(color, 1.0);
 }
@@ -178,7 +202,7 @@ fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
 
     let normal = normalize(in.normal);
-    let view_dir = normalize(camera.view_position.xyz - in.world_position);
+    let view_dir = normalize(camera.view_position.xyz - in.world_position.xyz);
 
-    return floor_color(t_coord, normal, view_dir);
+    return floor_color(t_coord, normal, view_dir, in.world_position);
 }

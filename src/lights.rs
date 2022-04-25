@@ -18,18 +18,24 @@ use crate::traits::Renderable;
 //  - position (point, spot)
 //  - fov (spot)
 
-type _P3 = cgmath::Point3<f32>;
+#[allow(dead_code)]
+type P3 = cgmath::Point3<f32>;
+#[allow(dead_code)]
 type V3 = cgmath::Vector3<f32>;
+#[allow(dead_code)]
+type V4 = cgmath::Vector4<f32>;
+#[allow(dead_code)]
 type M3 = cgmath::Matrix3<f32>;
+#[allow(dead_code)]
 type M4 = cgmath::Matrix4<f32>;
 
 pub const MAX_LIGHTS: usize = 8;
 
-const _WORLD_BOUND_MIN: V3 = cgmath::vec3::<f32>(-100.0, -100.0, 100.0);
-const _WORLD_BOUND_MAX: V3 = cgmath::vec3::<f32>(100.0, 100.0, 1000.0);
+// const _WORLD_BOUND_MIN: V3 = V3(-100.0, -100.0, 100.0);
+// const _WORLD_BOUND_MAX: V3 = V3(100.0, 100.0, 1000.0);
 const WORLD_BOUNDS: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
     left: -260.0,
-    right: 510.0,
+    right: 260.0,
     bottom: -101.0,
     top: 100.0,
     near: 100.0,
@@ -84,12 +90,13 @@ enum Light {
 
 impl Light {
     fn to_raw(&self) -> LightRaw {
+        let proj: [[f32; 4]; 4] = self.create_projection().into();
         match self {
             Self::Ambient { intensity, color } => LightRaw {
                 color: (color * *intensity).extend(1.0).into(),
                 direction: [0.0, 0.0, 0.0, 0.0],
                 position: [0.0, 0.0, 0.0, 0.0],
-                proj: M4::zero().into(),
+                proj: proj,
             },
             Self::Directional {
                 intensity,
@@ -99,7 +106,7 @@ impl Light {
                 color: (color * *intensity).extend(1.0).into(),
                 direction: direction.extend(1.0).into(),
                 position: [0.0, 0.0, 0.0, 0.0],
-                proj: M4::zero().into(),
+                proj: proj,
             },
         }
     }
@@ -110,7 +117,36 @@ impl Light {
         }
     }
 
+    #[allow(unused_variables, unused_assignments, dead_code, unreachable_code)]
     fn create_ortho(&self, dir: &V3) -> M4 {
+
+        let world_bounds: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
+            left: -120.0,
+            right: 120.0,
+            bottom: -120.0,
+            top: 120.0,
+            // near: 1300.0,
+            // far: -180.0,
+            near: -1800.0,
+            far: 1300.0,
+        };
+        let wbo: M4 = world_bounds.into();
+
+        const CORRECTION: M4 = M4::from_cols(
+            V4::new(1.0, 0.0, 0.0, 0.0),
+            V4::new(0.0, 1.0, 0.0, 0.0),
+            V4::new(0.0, 0.0, -1.0, 0.0),
+            V4::new(0.0, 0.0, 1.0, 1.0),
+        );
+
+        let mut proj: M4 = M4::identity();
+
+        proj = M4::look_to_rh(P3::origin(), -*dir, V3::unit_y()) * proj;
+        proj = wbo * proj;
+        proj = CORRECTION * proj;
+        return proj;
+
+
         // Find the minimal box aligned with dir that contains
         // the 8 corners of the world.
         let b = &WORLD_BOUNDS;
@@ -124,7 +160,7 @@ impl Light {
             (b.right, b.top, b.far),
             (b.right, b.top, b.near),
         ];
-        let rotate = M3::look_to_rh(-*dir, V3::unit_y());
+        let rotate = M3::look_to_rh(*dir, V3::unit_y());
         let empty_ortho = cgmath::Ortho::<f32> {
             left: f32::MAX,
             right: f32::MIN,
@@ -136,7 +172,6 @@ impl Light {
         let light_bounds = pts.iter().fold(empty_ortho, |accum, item| {
             let pt: V3 = (*item).into();
             let pt: V3 = rotate * pt;
-            // println!("pt = {:?}", pt);
             cgmath::Ortho::<f32> {
                 left: f32::min(accum.left, pt.x),
                 right: f32::max(accum.right, pt.x),
@@ -147,6 +182,10 @@ impl Light {
             }
         });
         let proj: M4 = light_bounds.into();
+
+        let mut proj: M4 = WORLD_BOUNDS.into();
+
+        proj = M4::look_to_rh(P3::origin(), *dir, V3::unit_y()) * proj;
         proj
     }
 }
@@ -189,6 +228,11 @@ impl Lights {
                 color: V3::new(1.0, 0.7, 0.5),
                 direction: V3::new(-1.0, 1.0, 1.0),
             },
+            Light::Directional {
+                intensity: 1.0,
+                color: V3::new(1.0, 0.9, 1.0),
+                direction: V3::new(-1.0, 1.0, -0.2),
+            },
         ];
         assert!(lights.len() <= MAX_LIGHTS);
 
@@ -207,8 +251,9 @@ impl Lights {
             let raw_size = std::mem::size_of::<ShadowUniformRaw>();
             let min_align = device.limits().min_uniform_buffer_offset_alignment;
             let aligned_size = round_up(raw_size, min_align);
+            let buffer_size = lights.len() * aligned_size;
 
-            let mut data = vec![0u8; aligned_size * lights.len()];
+            let mut data = vec![0u8; buffer_size];
 
             for (i, light) in lights.iter().enumerate() {
                 let proj = light.create_projection();
@@ -219,12 +264,20 @@ impl Lights {
                 ) = ShadowUniformRaw { proj: proj.into() };
             }
 
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("shadow_proj_uniform_buffer"),
-                contents: bytemuck::cast_slice(&data),
+            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("shadow_uniform_buffer"),
+                size: buffer_size as _,
                 usage: wgpu::BufferUsages::COPY_DST
                     | wgpu::BufferUsages::UNIFORM,
-            })
+                mapped_at_creation: true,
+            });
+            buffer
+                .slice(..)
+                .get_mapped_range_mut()[..buffer_size]
+                .copy_from_slice(bytemuck::cast_slice(&data));
+            buffer.unmap();
+
+            buffer
         };
 
         let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -287,11 +340,21 @@ impl Lights {
     }
 
     pub fn shadow_uniform_resource(&self) -> wgpu::BindingResource {
-        self.shadow_uniform_buffer.as_entire_binding()
+        wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+            buffer: &self.shadow_uniform_buffer,
+            offset: 0,
+            size: wgpu::BufferSize::new(
+                std::mem::size_of::<ShadowUniformRaw>() as _
+            ),
+        })
     }
 
     pub fn shadow_maps_resource(&self) -> wgpu::BindingResource {
         wgpu::BindingResource::TextureView(&self.shadow_view)
+    }
+
+    pub fn shadow_maps_sampler_resource(&self) -> wgpu::BindingResource {
+        wgpu::BindingResource::Sampler(&self.shadow_sampler)
     }
 
     pub fn light_has_shadow(&self, light_index: usize) -> bool {
