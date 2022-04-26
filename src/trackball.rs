@@ -21,6 +21,9 @@ use winit::event:: {
     WindowEvent,
 };
 
+const ROTATE_AT_START: bool = true;
+const RANDOMIZE_AXIS: bool = true;
+
 const MOUSE_INACTIVE: Duration = Duration::from_millis(50);
 
 pub trait Responder {
@@ -61,6 +64,25 @@ impl Trackball {
 
     pub fn new(viewport_size: &PhysicalSize<u32>) -> Self {
         let now = Instant::now();
+        let rotation_speed = if ROTATE_AT_START {
+            // full rotation every 1024 frames for looping video
+            Rad(std::f32::consts::TAU / 1024.0)
+        } else {
+            Rad(0f32)
+        };
+        let rotation_axis = if RANDOMIZE_AXIS {
+            // generate uniform random point on sphere
+            let u: f32 = rand::random();
+            let v: f32 = rand::random();
+            let theta = u * std::f32::consts::TAU;
+            let phi = (1.0 - 2.0 * v).acos();
+            let x = phi.sin() * theta.cos();
+            let y = phi.sin() * theta.sin();
+            let z = phi.cos();
+            Vector3::new(x, y, z)
+        } else {
+            Vector3::<f32>::unit_y()
+        };
 
         Self {
             cached_xform: None,
@@ -68,8 +90,8 @@ impl Trackball {
             prev_orientation: Quaternion::<f32>::one(),
             rot_per_dt: Some(
                 Quaternion::<f32>::from_axis_angle(
-                    Vector3::<f32>::unit_y(),
-                    Rad::<f32>(std::f32::consts::PI / 512.0),
+                    rotation_axis,
+                    rotation_speed,
                 )
             ),
             // rot_per_dt: None,
