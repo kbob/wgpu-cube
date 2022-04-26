@@ -25,7 +25,7 @@ use trackball::{
 const BACKFACE_CULL: bool = false;
 const ALPHA_BLENDING: bool = false;
 const SAMPLE_COUNT: u32 = 4;
-const PRINT_FPS: bool = false;
+const PRINT_FPS: bool = true;
 
 #[allow(dead_code)]
 #[derive(PartialEq)]
@@ -150,8 +150,16 @@ fn create_shadow_render_pipeline(
                 depth_compare: wgpu::CompareFunction::Greater,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState {
-                    constant: 2, // corresponds to bilinear filtering
-                    slope_scale: 2.0,
+                    // I stole this code from the wgpu shadow example.
+                    // That code includes this comment: "corresponds to
+                    // bilinear filtering".  I have no idea what that
+                    // means.  There is no wgpu documentation on depth
+                    // bias; the Vulkan docs say nothing about
+                    // bilinear filtering.
+                    // (I changed both parameters to negative because that
+                    // semms to work.)
+                    constant: -2, // corresponds to bilinear filtering
+                    slope_scale: -2.0,
                     clamp: 0.0,
                 },
             }),
