@@ -178,6 +178,31 @@ resources.
     
 # References
 
+## Quaternions and Rotations
+
+### **[Exponentially Better Rotations](https://thenumbat.github.io/Exponential-Rotations/)**
+*Max Slater*<br>
+Rotation math.  Hurts head.
+
+### **[Visualizing Quaternions](https://eater.net/quaternions)**
+*Grant Sanderson, Ben Eater*<br>
+Rotation math.  Hurts head but with "interactive video".
+
+## Deferred Rendering
+
+### **[Deferred Shading](https://learnopengl.com/Advanced-Lighting/Deferred-Shading)**
+*Learn OpenGl*
+Explains deferred shading and implements it in OpenGL.
+
+### **Deferred Shading**
+*Etay Meiri, OGL dev*<br>
+Another deferred shading tutorial in OpenGL.<br>
+[Part 1](https://ogldev.org/www/tutorial35/tutorial35.html)<br>
+[Part 2](https://ogldev.org/www/tutorial36/tutorial36.html)<br>
+[Part 3](https://ogldev.org/www/tutorial37/tutorial37.html)<br>
+
+## Shadow Maps
+
 ### **[Real-time Shadows](https://docs.google.com/presentation/d/1MwJcnSvkAzpT8BuoSqIkzlYLjdA_lBDrt8bW-vcwmDU/edit#slide=id.p)**
 *Javi Agenjo 2020*<br>
 Slide show gives a good overview of shadow mapping techniques.
@@ -192,9 +217,19 @@ Basically, Znear = +1, Zfar = 0 is best.  Zfar = +1 (DirectX) or -1
 *Michael Bunnel, Fabio Pellacini, GPU Gems*<br>
 How to multisample a shadow map for smooth edges
 
+## Virtual Trackballs
+
 ### **Virtual Trackballs Revisited**
 *Henriksen, Sporing, Hornbaek*<br>
 DOI:10.1109/TVCG.2004.1260772<br>
+Reviews and compares three trackball models.
+
+There's another paper on 
+### **[Virtual Trackballs and the Exponential Map](http://math.umd.edu/~gogo/Papers/trackballExp.pdf)**
+*Stantchev, U. of Maryland*<br>
+This appears to be a good trackball model.
+
+## Disney Shading
 
 ### **[Physically Based Shading at Disney](https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf)**
 *Brent Burley, Walt Disney Animation Studios*<br>
@@ -203,13 +238,17 @@ Explains Disney Animation's PBR material model in 2012.<br>
 [SIGGRAPH 2012 Slides](https://web.archive.org/web/20170531155921/http://blog.selfshadow.com/publications/s2012-shading-course/burley/s2012_pbs_disney_brdf_slides_v2.pdf)<br>
 [Disney BRDF Explorer](https://github.com/wdas/brdf)<br>
 
-### **[Exponentially Better Rotations](https://thenumbat.github.io/Exponential-Rotations/)**
-*Max Slater*<br>
-Rotation math.  Hurts head.
+### **[Implementing Disney Principled BRDF in Arnold](https://web.archive.org/web/20170602195106/http://shihchin.com/2015/07/implementing-disney-principled-brdf-in.html)**
+*Shih-Chin, 2015*<br>
+[Source Repository](https://github.com/shihchinw/rlShaders)<br>
+[Dev Reel](https://vimeo.com/150344036)<br>
 
-### **[Visualizing Quaternions](https://eater.net/quaternions)**
-*Grant Sanderson, Ben Eater*<br>
-Rotation math.  Hurts head but with "interactive video".
+## Advanced Lighting
+
+### **[Advanced Lighting: Bloom](https://learnopengl.com/Advanced-Lighting/Bloom)**
+*Learn OpenGL*<br>
+
+## Tools
 
 ### **[Debugging with Xcode](https://github.com/gfx-rs/wgpu/wiki/Debugging-with-Xcode)**
 *Joshua Groves, wgpu-rs Wiki*<br>
@@ -218,11 +257,3 @@ You can run wgpu programs under Xcode to use the Metal inspector.
 ### **[Developing and Debugging Metal Shaders](https://developer.apple.com/documentation/metal/developing_and_debugging_metal_shaders)**
 *Apple*
 Xcode has a very useful Metal debugging inspector.
-
-### **[Implementing Disney Principled BRDF in Arnold](https://web.archive.org/web/20170602195106/http://shihchin.com/2015/07/implementing-disney-principled-brdf-in.html)**
-*Shih-Chin, 2015*<br>
-[Source Repository](https://github.com/shihchinw/rlShaders)<br>
-[Dev Reel](https://vimeo.com/150344036)<br>
-
-### **[Advanced Lighting: Bloom](https://learnopengl.com/Advanced-Lighting/Bloom)**
-*Learn OpenGL*<br>
