@@ -12,6 +12,8 @@ struct Light {
     direction: vec4<f32>;
     position: vec4<f32>;
     proj: mat4x4<f32>;
+    shadow_map_size: f32;
+    shadow_map_inv_size: f32;
 };
 struct LightsUniform {
     count: u32;
@@ -139,17 +141,162 @@ fn blinn_phong_specular(
     return specular_color;
 }
 
-fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
+fn fetch_shadow(light_index: u32, homogeneous_coords: vec4<f32>) -> f32 {
     if (homogeneous_coords.w <= 0.0) {
         return 1.0;
     }
-    // compensate for the Y-flip difference between the NDC and texture coordinates
+    // compensate for the Y-flip difference between the NDC and
+    // texture coordinates
     let flip_correction = vec2<f32>(0.5, -0.5);
+
     // compute texture coordinates for shadow lookup
     let proj_correction = 1.0 / homogeneous_coords.w;
-    let light_local = homogeneous_coords.xy * flip_correction * proj_correction + vec2<f32>(0.5, 0.5);
+    let light_local = homogeneous_coords.xy * flip_correction * proj_correction
+        + vec2<f32>(0.5, 0.5);
+    
+    // skip sampling if texture index out of bounds
+    let clamped = clamp(light_local, vec2<f32>(0.0), vec2<f32>(1.0));
+    if (clamped.x != light_local.x || clamped.y != light_local.y) {
+        return 1.0;
+    }
+
     // do the lookup, using HW PCF and comparison
-    return textureSampleCompareLevel(t_shadow_maps, s_shadow_maps, light_local, i32(light_id), homogeneous_coords.z * proj_correction);
+    return textureSampleCompareLevel(
+        t_shadow_maps,
+        s_shadow_maps,
+        light_local,
+        i32(light_index),
+        homogeneous_coords.z * proj_correction
+    );
+}
+
+// This uses four samples and and ordered dither to approximate a
+// 16 sample average.
+fn fetch_shadow4(light_index: u32, homogeneous_coords: vec4<f32>) -> f32 {
+    if (homogeneous_coords.w <= 0.0) {
+        return 1.0;
+    }
+
+    let light = lights.lights[light_index];
+    let map_size = light.shadow_map_size;
+    let inv_map_size = light.shadow_map_inv_size;
+
+    // compensate for the Y-flip difference between the NDC and
+    // texture coordinates
+    let flip_correction = vec2<f32>(0.5, -0.5);
+
+    // compute texture coordinates for shadow lookup
+    let proj_correction = 1.0 / homogeneous_coords.w;
+    let light_local = homogeneous_coords.xy * flip_correction * proj_correction
+        + vec2<f32>(0.5, 0.5);
+
+    // skip sampling if texture index out of bounds
+    let clamped = clamp(light_local, vec2<f32>(0.0), vec2<f32>(1.0));
+    if (clamped.x != light_local.x || clamped.y != light_local.y) {
+        return 1.0;
+    }
+
+    // calculate dither matrix index
+    var offset = vec2<f32>(
+        f32(fract(map_size * light_local.x) > 0.5),
+        f32(fract(map_size * light_local.y) > 0.5),
+    );
+    offset.y = offset.y + offset.x; // y ^= x in floating point
+    if (offset.y > 1.1) {
+        offset.y = 0.0;
+    }
+
+    // do the lookup.  Average four samples.  Each sample uses
+    // HW PCF, comparison, and bias.
+    let uv = light_local + (offset + 0.5) * inv_map_size;
+    let s0 = textureSampleCompareLevel(
+        t_shadow_maps,
+        s_shadow_maps,
+        uv,
+        i32(light_index),
+        homogeneous_coords.z * proj_correction
+    );
+    let s1 = textureSampleCompareLevel(
+        t_shadow_maps,
+        s_shadow_maps,
+        uv,
+        i32(light_index),
+        homogeneous_coords.z * proj_correction,
+        vec2<i32>(0, -2)
+    );
+    let s2 = textureSampleCompareLevel(
+        t_shadow_maps,
+        s_shadow_maps,
+        uv,
+        i32(light_index),
+        homogeneous_coords.z * proj_correction,
+        vec2<i32>(-2, 0)
+    );
+    let s3 = textureSampleCompareLevel(
+        t_shadow_maps,
+        s_shadow_maps,
+        uv,
+        i32(light_index),
+        homogeneous_coords.z * proj_correction,
+        vec2<i32>(-2, -2)
+    );
+    return 0.25 * (s0 + s1 + s2 + s3);
+}
+
+fn fetch_shadow16(light_index: u32, homogeneous_coords: vec4<f32>) -> f32 {
+
+    if (homogeneous_coords.w <= 0.0) {
+        return 1.0;
+    }
+
+    let light = lights.lights[light_index];
+    let inv_map_size = light.shadow_map_inv_size;
+
+    // compensate for the Y-flip difference between the NDC and
+    // texture coordinates.
+    let flip_correction = vec2<f32>(0.5, -0.5);
+
+    // compute texture coordinates for shadow lookup.
+    let proj_correction = 1.0 / homogeneous_coords.w;
+    let light_local = homogeneous_coords.xy * flip_correction * proj_correction
+        + vec2<f32>(0.5, 0.5);
+
+    // skip sampling if texture index out of bounds.
+    let clamped = clamp(light_local, vec2<f32>(0.0), vec2<f32>(1.0));
+    if (clamped.x != light_local.x || clamped.y != light_local.y) {
+        return 1.0;
+    }
+
+    // sample.  16 bilinear samples per fragment.
+    let t = t_shadow_maps;
+    let s = s_shadow_maps;
+    let uv = light_local + 0.5 * inv_map_size;
+    let i = i32(light_index);
+    let z = 0.2;
+    let s00 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(-2, -2));
+    let s01 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(-2, -1));
+    let s02 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(-2, 0));
+    let s03 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(-2, 1));
+
+    let s10 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(-1, -2));
+    let s11 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(-1, -1));
+    let s12 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(-1, 0));
+    let s13 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(-1, 1));
+
+    let s20 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(0, -2));
+    let s21 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(0, -1));
+    let s22 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(0, 0));
+    let s23 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(0, 1));
+
+    let s30 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(1, -2));
+    let s31 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(1, -1));
+    let s32 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(1, 0));
+    let s33 = textureSampleCompareLevel(t, s, uv, i, z, vec2<i32>(1, 1));
+
+    return 0.0625 * (s00 + s01 + s02 + s03 +
+                     s10 + s11 + s12 + s13 +
+                     s20 + s21 + s22 + s23 +
+                     s30 + s31 + s32 + s33);
 }
 
 fn floor_color(
@@ -160,8 +307,6 @@ fn floor_color(
 ) -> vec4<f32> {
     let material_color =
         textureSample(t_floor_decal, s_floor_decal, tex_coord).rgb * 0.3;
-    // let depth = textureSample(t_shadow_maps, s_shadow_maps, tex_coord, 1);
-    // let material_color = vec3<f32>(depth);
 
     var color = vec3<f32>(0.0);
 
@@ -174,8 +319,11 @@ fn floor_color(
         let light_dir = normalize(light.direction.xyz);
         let half_dir = normalize(view_dir + light_dir);
 
-        let shadow = fetch_shadow(i, light.proj * world_pos);
-        // let shadow = 1.0;
+        // let s1 = fetch_shadow(i, light.proj * world_pos);
+        let shadow = fetch_shadow4(i, light.proj * world_pos);
+        // let shadow = fetch_shadow16(i, light.proj * world_pos);
+        // let shadow = 0.5 + s1 - s16;
+    
 
         // let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
         let diffuse = burley_diffuse(

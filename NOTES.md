@@ -178,15 +178,19 @@ resources.
     
 # References
 
+### **[Real-time Shadows](https://docs.google.com/presentation/d/1MwJcnSvkAzpT8BuoSqIkzlYLjdA_lBDrt8bW-vcwmDU/edit#slide=id.p)**
+*Javi Agenjo 2020*<br>
+Slide show gives a good overview of shadow mapping techniques.
+
 ### **[Depth Precision Visualized](https://developer.nvidia.com/content/depth-precision-visualized)**
 *Nathan Reed, NVIDIA Developer Content*<br>
 Explains depth buffer resolution nonlinearities.
-Basically, Zfar = 0 is best.  Zfar = +1 (DirectX) or -1 (OpenGL)
-significantly reduces a floating point Z buffer's linearity.
+Basically, Znear = +1, Zfar = 0 is best.  Zfar = +1 (DirectX) or -1
+(OpenGL) significantly reduces a floating point Z buffer's linearity.
 
-### **[Real-time Shadows](https://docs.google.com/presentation/d/1MwJcnSvkAzpT8BuoSqIkzlYLjdA_lBDrt8bW-vcwmDU/edit#slide=id.p)**
-*Javi Agenjo 2020*<br>
-Slide show gives a good overview of shadow mapping.
+### **[Shadow Map Antialiasing](https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing)**
+*Michael Bunnel, Fabio Pellacini, GPU Gems*<br>
+How to multisample a shadow map for smooth edges
 
 ### **Virtual Trackballs Revisited**
 *Henriksen, Sporing, Hornbaek*<br>

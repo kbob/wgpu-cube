@@ -19,7 +19,7 @@
  * ~~add accessor functions to generate `BindingResource`s.~~
  * maybe create a module for shaders and pipelines?
  * ~~move blinky into its own module.~~
- * only push camera and lights uniforms to GPU when they change.`
+ * only push camera and lights uniforms to GPU when they change.
  * ~~use `include_wgsl!` macro instead of `include_str!`.~~
 
 ## Features
@@ -34,11 +34,12 @@
  * put smudges or patina on the mirror.
  * ~~use multisampling.~~
 
-## Lighting Strategy
+## ~~Lighting Strategy~~
 
  * ~~decide how to allocate bind groups.~~
  * ~~define lights and pass them through to the shaders.~~
  * ~~add Burley diffuse lighting to edge shader.~~
  * ~~brute force a shadow map.~~
  * ~~refactor shadow map.~~
- * blur the shadows.
+ * ~~blur the shadows.~~
+ * ~~clip shadow map lookups to in-bounds texels.~~

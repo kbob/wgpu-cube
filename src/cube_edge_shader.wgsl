@@ -12,6 +12,8 @@ struct Light {
     direction: vec4<f32>;
     position: vec4<f32>;
     proj: mat4x4<f32>;
+    shadow_map_size: f32;
+    shadow_map_inv_size: f32;
 };
 struct LightsUniform {
     count: u32;

@@ -20,7 +20,7 @@ use crate::traits::Renderable;
 
 pub const MAX_LIGHTS: usize = 8;
 
-const SHADOW_MAP_SIZE: u32 = 512;
+const SHADOW_MAP_SIZE: u32 = 128;
 pub const SHADOW_MAP_FORMAT: wgpu::TextureFormat =
     wgpu::TextureFormat::Depth32Float;
 
@@ -50,6 +50,9 @@ struct LightRaw {
     direction: [f32; 4],
     position: [f32; 4],
     proj: [[f32; 4]; 4],
+    shadow_map_size: f32,
+    shadow_map_inv_size: f32,
+    _padding: [i32; 2],
 }
 
 #[repr(C)]
@@ -95,6 +98,9 @@ impl Light {
                 direction: [0.0, 0.0, 0.0, 0.0],
                 position: [0.0, 0.0, 0.0, 0.0],
                 proj: proj,
+                shadow_map_size: 1f32,
+                shadow_map_inv_size: 1f32,
+                _padding: [0, 0],
             },
             Self::Directional {
                 intensity,
@@ -105,6 +111,9 @@ impl Light {
                 direction: direction.extend(1.0).into(),
                 position: [0.0, 0.0, 0.0, 0.0],
                 proj: proj,
+                shadow_map_size: SHADOW_MAP_SIZE as f32,
+                shadow_map_inv_size: 1.0 / SHADOW_MAP_SIZE as f32,
+                _padding: [0, 0],
             },
         }
     }
