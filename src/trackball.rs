@@ -1,25 +1,10 @@
-use std::time:: {
-    Duration,
-    Instant,
-};
+use std::time::{Duration, Instant};
 
-use cgmath::prelude::*;
-use cgmath:: {
-    Matrix4,
-    Quaternion,
-    Rad,
-    Vector2,
-    Vector3,
-};
-use winit::dpi:: {
-    PhysicalPosition,
-    PhysicalSize,
-};
-use winit::event:: {
-    ElementState,
-    MouseButton,
-    WindowEvent,
-};
+use cgmath::{Quaternion, Rad, Vector2};
+use winit::dpi::{PhysicalPosition, PhysicalSize};
+use winit::event::{ElementState, MouseButton, WindowEvent};
+
+use crate::prelude::*;
 
 const ROTATE_AT_START: bool = true;
 const RANDOMIZE_AXIS: bool = true;
@@ -37,12 +22,12 @@ pub trait Manipulable {
     fn mouse_down(&mut self, pos: &PhysicalPosition<f64>, t: Instant);
     fn mouse_drag(&mut self, pos: &PhysicalPosition<f64>, t: Instant);
     fn mouse_up(&mut self, t: Instant);
-    fn orientation(&mut self, t: Instant) -> Matrix4<f32>;
+    fn orientation(&mut self, t: Instant) -> Mat4;
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Trackball {
-    cached_xform: Option<Matrix4<f32>>,
+    cached_xform: Option<Mat4>,
     cur_orientation: Quaternion<f32>,
     prev_orientation: Quaternion<f32>,
     drag_dt: Duration,
@@ -54,14 +39,13 @@ pub struct Trackball {
     // viewport_center: ???,
     physical_position: PhysicalPosition<f64>,
     prev_drag_pos: PhysicalPosition<f64>,
-    last_drag_point: Vector3<f32>,
-    last2_drag_point: Vector3<f32>,
+    last_drag_point: Vec3,
+    last2_drag_point: Vec3,
     last_drag_time: Instant,
     last2_drag_time: Instant,
 }
 
 impl Trackball {
-
     pub fn new(viewport_size: &PhysicalSize<u32>) -> Self {
         let now = Instant::now();
         let rotation_speed = if ROTATE_AT_START {
@@ -79,21 +63,19 @@ impl Trackball {
             let x = phi.sin() * theta.cos();
             let y = phi.sin() * theta.sin();
             let z = phi.cos();
-            Vector3::new(x, y, z)
+            Vec3::new(x, y, z)
         } else {
-            Vector3::<f32>::unit_y()
+            Vec3::unit_y()
         };
 
         Self {
             cached_xform: None,
-            cur_orientation: Quaternion::<f32>::one(),
-            prev_orientation: Quaternion::<f32>::one(),
-            rot_per_dt: Some(
-                Quaternion::<f32>::from_axis_angle(
-                    rotation_axis,
-                    rotation_speed,
-                )
-            ),
+            cur_orientation: Quaternion::one(),
+            prev_orientation: Quaternion::one(),
+            rot_per_dt: Some(Quaternion::from_axis_angle(
+                rotation_axis,
+                rotation_speed,
+            )),
             drag_dt: Duration::new(0, 1_000_000_000 / 60),
             prev_orientation_time: now,
 
@@ -101,15 +83,14 @@ impl Trackball {
             viewport_size: *viewport_size,
             physical_position: PhysicalPosition::new(0.0, 0.0),
             prev_drag_pos: PhysicalPosition::new(0.0, 0.0),
-            last_drag_point: Vector3::<f32>::unit_z(),
-            last2_drag_point: Vector3::<f32>::unit_z(),
+            last_drag_point: Vec3::unit_z(),
+            last2_drag_point: Vec3::unit_z(),
             last_drag_time: now,
             last2_drag_time: now,
         }
     }
 
-    fn surface_point(&self, pos: &PhysicalPosition<f64>) -> Vector3<f32>
-    {
+    fn surface_point(&self, pos: &PhysicalPosition<f64>) -> Vec3 {
         // Implements the Bell virtual trackball in
         // Henriksen, Sporing, Hornbaek
         // Virtual Trackballs Revisited
@@ -120,23 +101,21 @@ impl Trackball {
             pos.y / (self.viewport_size.height as f64) * -2.0 + 1.0,
         );
         let r2 = pos.x * pos.x + pos.y * pos.y;
-        Vector3::new(
+        Vec3::new(
             pos.x as f32,
             pos.y as f32,
             if r2 < 0.5f64.sqrt() {
-                (1.0 - r2).sqrt()       // inside the circle: pt on unit sphere
+                (1.0 - r2).sqrt() // inside the circle: pt on unit sphere
             } else {
-
-                0.5 / r2.sqrt()         // outside: on hyperbola
-            } as f32
-        ).normalize()
+                0.5 / r2.sqrt() // outside: on hyperbola
+            } as f32,
+        )
+        .normalize()
     }
 }
 
 impl Manipulable for Trackball {
-
-    fn set_viewport_size(&mut self, new_size: &PhysicalSize<u32>)
-    {
+    fn set_viewport_size(&mut self, new_size: &PhysicalSize<u32>) {
         self.viewport_size = *new_size;
     }
 
@@ -165,7 +144,7 @@ impl Manipulable for Trackball {
             let rotation = Quaternion::from_arc(
                 self.last2_drag_point,
                 self.last_drag_point,
-                None
+                None,
             );
             self.cur_orientation = rotation * self.cur_orientation;
             self.cached_xform = None;
@@ -178,7 +157,7 @@ impl Manipulable for Trackball {
             let rotation = Quaternion::from_arc(
                 self.last2_drag_point,
                 self.last_drag_point,
-                None
+                None,
             );
             let dt = self.last_drag_time - self.last2_drag_time;
             self.rot_per_dt = Some(rotation);
@@ -188,31 +167,30 @@ impl Manipulable for Trackball {
         }
     }
 
-    fn orientation(&mut self, t: Instant) -> Matrix4<f32> {
+    fn orientation(&mut self, t: Instant) -> Mat4 {
         if self.mouse_state == ElementState::Released {
             if let Some(vel) = self.rot_per_dt {
                 let dt = t.duration_since(self.prev_orientation_time);
                 if !dt.is_zero() {
                     let dest = vel * self.cur_orientation;
                     let amount = dt.as_secs_f32() / self.drag_dt.as_secs_f32();
-                    self.cur_orientation = self.cur_orientation.nlerp(
-                        dest,
-                        amount,
-                    );
+                    self.cur_orientation =
+                        self.cur_orientation.nlerp(dest, amount);
                     self.cur_orientation = vel * self.cur_orientation;
                     self.cached_xform = None;
-                } 
+                }
             }
             self.prev_orientation_time = t;
         }
 
-        *self.cached_xform.get_or_insert_with(|| self.cur_orientation.into())
+        *self
+            .cached_xform
+            .get_or_insert_with(|| self.cur_orientation.into())
     }
 }
 impl Responder for Trackball {
     fn handle_window_event(&mut self, evt: &WindowEvent) -> bool {
         match evt {
-
             WindowEvent::MouseInput {
                 button: MouseButton::Left,
                 state: new_state,
@@ -229,19 +207,16 @@ impl Responder for Trackball {
                     ElementState::Released => self.mouse_up(now),
                 }
                 true
-            },
+            }
 
-            WindowEvent::CursorMoved {
-                position: pos,
-                ..
-            } => {
+            WindowEvent::CursorMoved { position: pos, .. } => {
                 let now = Instant::now();
                 self.physical_position = *pos;
                 if self.mouse_state == ElementState::Pressed {
                     self.mouse_drag(pos, now);
                 }
                 true
-            },
+            }
 
             _ => false,
         }

@@ -28,7 +28,7 @@
  * set trackball center at cube's center.
  * ~~add lighting.~~
  * ~~add a floor.~~
- * put shadows on the floor.
+ * ~~put shadows on the floor.~~
  * implement LED animation.
  * add a mirror.
  * put smudges or patina on the mirror.
@@ -39,5 +39,6 @@
  * ~~decide how to allocate bind groups.~~
  * ~~define lights and pass them through to the shaders.~~
  * ~~add Burley diffuse lighting to edge shader.~~
- * brute force a shadow map.
- * refactor shadow map.
+ * ~~brute force a shadow map.~~
+ * ~~refactor shadow map.~~
+ * blur the shadows.
