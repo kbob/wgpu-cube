@@ -5,13 +5,13 @@ use wgpu::util::DeviceExt;
 const FLOOR_HEIGHT: f32 = -120.0;
 const FLOOR_WIDTH: f32 = 750.0;
 const FLOOR_LENGTH: f32 = 750.0;
-const FLOOR_BOUNDS: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
+pub const FLOOR_BOUNDS_WORLD: cgmath::Ortho<f32> = cgmath::Ortho {
     left: 60.0 - FLOOR_WIDTH / 2.0,
     right: 60.0 + FLOOR_WIDTH / 2.0,
     bottom: FLOOR_HEIGHT,
     top: FLOOR_HEIGHT,
     near: 150.0,
-    far:  150.0 - FLOOR_LENGTH,
+    far: 150.0 - FLOOR_LENGTH,
 };
 
 #[repr(C)]
@@ -82,15 +82,15 @@ impl Floor {
     fn create_vertex_data() -> Vec<FloorVertexRaw> {
         #[rustfmt::skip]
         let corners = [
-            (0, 0), (1, 0), (0, 1),
-            (1, 1), (0, 1), (1, 0),
+            (0, 0), (1, 0), (0, 1), // NW triangle
+            (1, 1), (0, 1), (1, 0), // SE triangle
         ];
 
         let mut data = Vec::new();
         for (i, j) in corners {
-            let x = [FLOOR_BOUNDS.left, FLOOR_BOUNDS.right][i];
+            let x = [FLOOR_BOUNDS_WORLD.left, FLOOR_BOUNDS_WORLD.right][i];
             let y = FLOOR_HEIGHT;
-            let z = [FLOOR_BOUNDS.near, FLOOR_BOUNDS.far][j];
+            let z = [FLOOR_BOUNDS_WORLD.near, FLOOR_BOUNDS_WORLD.far][j];
             let u = i as f32;
             let v = j as f32;
             data.push(FloorVertexRaw {

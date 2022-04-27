@@ -1,29 +1,18 @@
-use cgmath::prelude::*;
+use crate::prelude::*;
 use wgpu::util::DeviceExt;
 
 use crate::traits::Renderable;
 use crate::Hand;
 
-#[allow(dead_code)]
-type P3 = cgmath::Point3<f32>;
-#[allow(dead_code)]
-type V3 = cgmath::Vector3<f32>;
-#[allow(dead_code)]
-type V4 = cgmath::Vector4<f32>;
-#[allow(dead_code)]
-type M3 = cgmath::Matrix3<f32>;
-#[allow(dead_code)]
-type M4 = cgmath::Matrix4<f32>;
-
 #[rustfmt::skip]
-pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
+pub const OPENGL_TO_WGPU_MATRIX: Mat4 = Mat4::new(
     1.0,  0.0,  0.0,  0.0,
     0.0,  1.0,  0.0,  0.0,
     0.0,  0.0, -0.5,  0.0,
     0.0,  0.0,  0.5,  1.0,
 );
 #[rustfmt::skip]
-pub const LEFT_HAND_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
+pub const LEFT_HAND_TO_WGPU_MATRIX: Mat4 = Mat4::new(
     1.0,  0.0,  0.0,  0.0,
     0.0,  1.0,  0.0,  0.0,
     0.0,  0.0,  0.5,  0.0,
@@ -38,9 +27,9 @@ struct CameraUniformRaw {
 }
 
 pub struct Camera {
-    eye: cgmath::Point3<f32>,
-    target: cgmath::Point3<f32>,
-    up: cgmath::Vector3<f32>,
+    eye: Point3,
+    target: Point3,
+    up: Vec3,
     aspect: f32,
     fovy: f32,
     znear: f32,
@@ -59,7 +48,7 @@ impl Camera {
     ) -> Self {
         let uniform_raw = CameraUniformRaw {
             view_position: [0.0, 0.0, 0.0, 0.0],
-            view_proj: cgmath::Matrix4::<f32>::identity().into(),
+            view_proj: Mat4::identity().into(),
         };
         let uniform_buffer =
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -73,7 +62,7 @@ impl Camera {
             // hardcoded position, oh my!
             eye: (0.0, 170.0, 300.0).into(),
             target: (60.0, 0.0, 0.0).into(),
-            up: cgmath::Vector3::unit_y(),
+            up: Vec3::unit_y(),
             aspect: width as f32 / height as f32,
             fovy: 45.0,
             znear: 100.0,
@@ -91,11 +80,8 @@ impl Camera {
         self.aspect = width as f32 / height as f32;
     }
 
-    #[allow(unused_variables, unused_assignments)]
-    #[allow(dead_code)]
-    #[allow(unreachable_code)]
-    fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
-        let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
+    fn build_view_projection_matrix(&self) -> Mat4 {
+        let view = Mat4::look_at_rh(self.eye, self.target, self.up);
         let proj = cgmath::perspective(
             cgmath::Deg(self.fovy),
             self.aspect,
@@ -107,46 +93,7 @@ impl Camera {
             Hand::Right => OPENGL_TO_WGPU_MATRIX,
         };
 
-        return convert * proj * view;
-        
-        // HACK HACK HACK
-    
-        let world_bounds: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
-            left: -500.0,
-            right: 370.0,
-            bottom: -270.0,
-            top: 250.0,
-            near: 1300.0,
-            far: -180.0,
-        };
-        let world_bounds: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
-            left: -120.0,
-            right: 120.0,
-            bottom: -120.0,
-            top: 120.0,
-            // near: 1300.0,
-            // far: -180.0,
-            near: -1800.0,
-            far: 1300.0,
-        };
-        let wbo: M4 = world_bounds.into();
-
-        const CORRECTION: M4 = M4::from_cols(
-            V4::new(1.0, 0.0, 0.0, 0.0),
-            V4::new(0.0, 1.0, 0.0, 0.0),
-            V4::new(0.0, 0.0, -1.0, 0.0),
-            V4::new(0.0, 0.0, 1.0, 1.0),
-        );
-
-        let dir = V3::new(-1.0, 1.0, 1.0);
-
-        let mut proj: M4 = M4::identity();
-
-        proj = M4::look_to_rh(P3::origin(), -dir, V3::unit_y()) * proj;
-        proj = wbo * proj;
-        proj = CORRECTION * proj;
-        proj
-
+        convert * proj * view
     }
 }
 

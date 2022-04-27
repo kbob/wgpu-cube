@@ -12,6 +12,7 @@ mod cube;
 mod cube_model;
 mod floor;
 mod lights;
+mod prelude;
 mod test_pattern;
 mod texture;
 mod traits;
@@ -22,12 +23,11 @@ use trackball::{
     Responder,
 };
 
-const BACKFACE_CULL: bool = false;
+const BACKFACE_CULL: bool = true;
 const ALPHA_BLENDING: bool = false;
 const SAMPLE_COUNT: u32 = 4;
 const PRINT_FPS: bool = true;
 
-#[allow(dead_code)]
 #[derive(PartialEq)]
 pub enum Hand {
     Left,
@@ -38,8 +38,6 @@ const WORLD_HANDEDNESS: Hand = Hand::Right;
 const BACKGROUND_COLOR: wgpu::Color = wgpu::Color {
     r: 0.00250, g: 0.00625, b: 0.01500, a: 1.0,
 };
-
-const SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 pub fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>());
@@ -137,14 +135,13 @@ fn create_shadow_render_pipeline(
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                // cull_mode: Some(wgpu::Face::Back),
-                cull_mode: None,
+                cull_mode: Some(wgpu::Face::Back),
                 polygon_mode: wgpu::PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: SHADOW_FORMAT,
+                format: lights::SHADOW_MAP_FORMAT,
                 depth_write_enabled: true,
                 // N.B. Shadow worlds are always right-handed.
                 depth_compare: wgpu::CompareFunction::Greater,
@@ -563,7 +560,7 @@ impl State {
         );
         let mut encoder = self.device.create_command_encoder(
             &wgpu::CommandEncoderDescriptor {
-                label: Some("arthur_the_encoder"),
+                label: Some("the_only_encoder"),
             }
         );
 
@@ -603,6 +600,10 @@ impl State {
         }
         
         for light_index in 0..lights::MAX_LIGHTS {
+
+            // This inner scope ensures `shadow_pass` is destroyed
+            // before the prepared data created above.
+
             if !self.lights.light_has_shadow(light_index) {
                 continue;
             }
@@ -671,7 +672,7 @@ impl State {
 
         // Forward Render Pass
         {
-            // Inner scope ensures prepared data above outlives
+            // Inner scope ensures prepared data created above outlives
             // the render pass.
 
             let mut render_pass = encoder.begin_render_pass(
@@ -744,15 +745,15 @@ impl State {
                     &mut render_pass,
                     &cube_face_prepared_data,
                 );
-            }
-            if true {
-                // cube edges
-                render_pass.set_pipeline(&self.cube_edge_forward_pipeline);
-                self.cube.render(
-                    &self.queue,
-                    &mut render_pass,
-                    &cube_edge_prepared_data,
-                );
+                if true {
+                    // cube edges - must render faces first to set up uniform
+                    render_pass.set_pipeline(&self.cube_edge_forward_pipeline);
+                    self.cube.render(
+                        &self.queue,
+                        &mut render_pass,
+                        &cube_edge_prepared_data,
+                    );
+                }
             }
             if true {
                 // floor

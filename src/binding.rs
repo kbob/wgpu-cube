@@ -119,7 +119,6 @@ impl FrameBindings {
     pub const GROUP_INDEX: u32 = 1;
     const BLINKY_TEXTURE: u32 = 0;
     const CUBE_UNIFORM: u32 = 1;
-    // const SHADOW_MAPS: u32 = 2;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let layout =
@@ -147,16 +146,6 @@ impl FrameBindings {
                         },
                         count: None,
                     },
-                    // wgpu::BindGroupLayoutEntry {
-                    //     binding: Self::SHADOW_MAPS,
-                    //     visibility: wgpu::ShaderStages::FRAGMENT,
-                    //     ty: wgpu::BindingType::Texture {
-                    //         multisampled: false,
-                    //         sample_type: wgpu::TextureSampleType::Depth,
-                    //         view_dimension: wgpu::TextureViewDimension::D2Array,
-                    //     },
-                    //     count: None,
-                    // },
                 ],
             });
         Self { layout }
@@ -167,7 +156,6 @@ impl FrameBindings {
         device: &wgpu::Device,
         blinky_texture: wgpu::BindingResource,
         cube_uniform: wgpu::BindingResource,
-        // shadow_maps: wgpu::BindingResource,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("frame_bind_group"),
@@ -181,10 +169,6 @@ impl FrameBindings {
                     binding: Self::CUBE_UNIFORM,
                     resource: cube_uniform,
                 },
-                // wgpu::BindGroupEntry {
-                //     binding: Self::SHADOW_MAPS,
-                //     resource: shadow_maps,
-                // },
             ],
         })
     }
@@ -256,16 +240,15 @@ impl ForwardPassBindings {
                         },
                         count: None,
                     },
-                wgpu::BindGroupLayoutEntry {
-                    binding: Self::SHADOW_MAPS_SAMPLER,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(
-                        wgpu::SamplerBindingType::Comparison
-                        // wgpu::SamplerBindingType::Filtering
-
-                    ),
-                    count: None,
-                }],
+                    wgpu::BindGroupLayoutEntry {
+                        binding: Self::SHADOW_MAPS_SAMPLER,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(
+                            wgpu::SamplerBindingType::Comparison,
+                        ),
+                        count: None,
+                    },
+                ],
             });
         Self { layout }
     }

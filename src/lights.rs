@@ -1,6 +1,6 @@
-use cgmath::prelude::*;
 use wgpu::util::*;
 
+use crate::prelude::*;
 use crate::traits::Renderable;
 
 // Light types
@@ -9,7 +9,7 @@ use crate::traits::Renderable;
 //  - point
 //  - spot
 //  - ... other
-// Should probably start with point.
+// Should probably start with directional.
 //
 // Light fields:
 //  - intensity (all)
@@ -18,37 +18,29 @@ use crate::traits::Renderable;
 //  - position (point, spot)
 //  - fov (spot)
 
-#[allow(dead_code)]
-type P3 = cgmath::Point3<f32>;
-#[allow(dead_code)]
-type V3 = cgmath::Vector3<f32>;
-#[allow(dead_code)]
-type V4 = cgmath::Vector4<f32>;
-#[allow(dead_code)]
-type M3 = cgmath::Matrix3<f32>;
-#[allow(dead_code)]
-type M4 = cgmath::Matrix4<f32>;
-
 pub const MAX_LIGHTS: usize = 8;
 
-// const _WORLD_BOUND_MIN: V3 = V3(-100.0, -100.0, 100.0);
-// const _WORLD_BOUND_MAX: V3 = V3(100.0, 100.0, 1000.0);
-const WORLD_BOUNDS: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
-    left: -260.0,
-    right: 260.0,
-    bottom: -101.0,
-    top: 100.0,
-    near: 100.0,
-    far: -600.0,
-};
-
 const SHADOW_MAP_SIZE: u32 = 512;
-const SHADOW_MAP_FORMAT: wgpu::TextureFormat =
+pub const SHADOW_MAP_FORMAT: wgpu::TextureFormat =
     wgpu::TextureFormat::Depth32Float;
 
 fn round_up(n: usize, align: u32) -> usize {
     let align = align as usize;
     (n + align - 1) / align * align
+}
+
+// return the corners of an Ortho used as a bounding box.
+fn ortho_corners(orth: &cgmath::Ortho<f32>) -> Vec<Vec3> {
+    let mut corners = vec![];
+    for x in [orth.left, orth.right] {
+        for y in [orth.bottom, orth.top] {
+            for z in [orth.far, orth.near] {
+                corners.push((x, y, z).into());
+            }
+        }
+    }
+
+    corners
 }
 
 #[repr(C)]
@@ -77,15 +69,21 @@ struct ShadowUniformRaw {
 enum Light {
     Ambient {
         intensity: f32,
-        color: V3,
+        color: Vec3,
     },
     Directional {
         intensity: f32,
-        color: V3,
-        direction: V3,
+        color: Vec3,
+        direction: Vec3,
     },
-    // Point { intensity: f32, color: V3, position: P3 },
-    //Spot { intensity: f32, color: V3, direction: V3, position: P3, fov: f32 },
+    // Point { intensity: f32, color: Vec3, position: Point3 },
+    // Spot {
+    //     intensity: f32,
+    //     color: Vec3,
+    //     direction: Vec3,
+    //     position: Point3,
+    //     fov: f32,
+    // },
 }
 
 impl Light {
@@ -110,83 +108,31 @@ impl Light {
             },
         }
     }
-    fn create_projection(&self) -> M4 {
+    fn create_projection(&self) -> Mat4 {
         match self {
-            Self::Ambient { .. } => M4::zero(),
+            Self::Ambient { .. } => Mat4::zero(),
             Self::Directional { direction: dir, .. } => self.create_ortho(dir),
         }
     }
 
-    #[allow(unused_variables, unused_assignments, dead_code, unreachable_code)]
-    fn create_ortho(&self, dir: &V3) -> M4 {
+    fn create_ortho(&self, dir: &Vec3) -> Mat4 {
+        // rotation matrix looks away from the light
+        let away_from_light =
+            Mat4::look_to_rh(Point3::origin(), -*dir, Vec3::unit_y());
 
-        let world_bounds: cgmath::Ortho<f32> = cgmath::Ortho::<f32> {
-            left: -120.0,
-            right: 120.0,
-            bottom: -120.0,
-            top: 120.0,
-            // near: 1300.0,
-            // far: -180.0,
-            near: -1800.0,
-            far: 1300.0,
-        };
-        let wbo: M4 = world_bounds.into();
+        // ortho projection matrix is wide enough to hold the cube,
+        // but `far` is extended to reach the furthest corner of
+        // the floor.
+        let mut bounds = crate::cube::CUBE_BOUNDS_WORLD;
+        bounds.near = -bounds.near; // near/far are distance to, not
+        bounds.far = -bounds.far; // coordinates.
+        bounds.far = ortho_corners(&crate::floor::FLOOR_BOUNDS_WORLD)
+            .iter()
+            .map(|corner| -(away_from_light * corner.extend(1.0)).z)
+            .fold(bounds.far, |max, z| max.max(z));
+        let ortho: Mat4 = bounds.into();
 
-        const CORRECTION: M4 = M4::from_cols(
-            V4::new(1.0, 0.0, 0.0, 0.0),
-            V4::new(0.0, 1.0, 0.0, 0.0),
-            V4::new(0.0, 0.0, -1.0, 0.0),
-            V4::new(0.0, 0.0, 1.0, 1.0),
-        );
-
-        let mut proj: M4 = M4::identity();
-
-        proj = M4::look_to_rh(P3::origin(), -*dir, V3::unit_y()) * proj;
-        proj = wbo * proj;
-        proj = CORRECTION * proj;
-        return proj;
-
-
-        // Find the minimal box aligned with dir that contains
-        // the 8 corners of the world.
-        let b = &WORLD_BOUNDS;
-        let pts = vec![
-            (b.left, b.bottom, b.far),
-            (b.left, b.bottom, b.near),
-            (b.left, b.top, b.far),
-            (b.left, b.top, b.near),
-            (b.right, b.bottom, b.far),
-            (b.right, b.bottom, b.near),
-            (b.right, b.top, b.far),
-            (b.right, b.top, b.near),
-        ];
-        let rotate = M3::look_to_rh(*dir, V3::unit_y());
-        let empty_ortho = cgmath::Ortho::<f32> {
-            left: f32::MAX,
-            right: f32::MIN,
-            bottom: f32::MAX,
-            top: f32::MIN,
-            far: f32::MAX,
-            near: f32::MIN,
-        };
-        let light_bounds = pts.iter().fold(empty_ortho, |accum, item| {
-            let pt: V3 = (*item).into();
-            let pt: V3 = rotate * pt;
-            cgmath::Ortho::<f32> {
-                left: f32::min(accum.left, pt.x),
-                right: f32::max(accum.right, pt.x),
-                bottom: f32::min(accum.bottom, pt.y),
-                top: f32::max(accum.top, pt.y),
-                far: f32::min(accum.far, pt.z),
-                near: f32::max(accum.near, pt.z),
-            }
-        });
-        let proj: M4 = light_bounds.into();
-
-        let mut proj: M4 = WORLD_BOUNDS.into();
-
-        proj = M4::look_to_rh(P3::origin(), *dir, V3::unit_y()) * proj;
-        proj
+        crate::camera::OPENGL_TO_WGPU_MATRIX * ortho * away_from_light
     }
 }
 
@@ -221,17 +167,17 @@ impl Lights {
         let lights = vec![
             Light::Ambient {
                 intensity: 0.05,
-                color: V3::new(1.0, 1.0, 1.0),
+                color: Vec3::new(1.0, 1.0, 1.0),
             },
             Light::Directional {
                 intensity: 1.0,
-                color: V3::new(1.0, 0.7, 0.5),
-                direction: V3::new(-1.0, 1.0, 1.0),
+                color: Vec3::new(1.0, 0.7, 0.5),
+                direction: Vec3::new(-1.0, 1.0, 1.0),
             },
             Light::Directional {
                 intensity: 1.0,
-                color: V3::new(1.0, 0.9, 1.0),
-                direction: V3::new(-1.0, 1.0, -0.2),
+                color: Vec3::new(1.0, 0.9, 1.0),
+                direction: Vec3::new(-1.0, 1.0, -0.2),
             },
         ];
         assert!(lights.len() <= MAX_LIGHTS);
@@ -271,9 +217,7 @@ impl Lights {
                     | wgpu::BufferUsages::UNIFORM,
                 mapped_at_creation: true,
             });
-            buffer
-                .slice(..)
-                .get_mapped_range_mut()[..buffer_size]
+            buffer.slice(..).get_mapped_range_mut()[..buffer_size]
                 .copy_from_slice(bytemuck::cast_slice(&data));
             buffer.unmap();
 
@@ -344,7 +288,7 @@ impl Lights {
             buffer: &self.shadow_uniform_buffer,
             offset: 0,
             size: wgpu::BufferSize::new(
-                std::mem::size_of::<ShadowUniformRaw>() as _
+                std::mem::size_of::<ShadowUniformRaw>() as _,
             ),
         })
     }

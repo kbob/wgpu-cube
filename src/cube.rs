@@ -5,6 +5,15 @@ use crate::cube_model;
 use crate::texture;
 use crate::traits::Renderable;
 
+pub const CUBE_BOUNDS_WORLD: cgmath::Ortho<f32> = cgmath::Ortho {
+    left: -120.0,
+    right: 120.0,
+    bottom: -120.0,
+    top: 120.0,
+    far: -120.0,
+    near: 120.0,
+};
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct CubeUniformRaw {
