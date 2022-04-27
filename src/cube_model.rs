@@ -1,7 +1,9 @@
 use std::io::BufReader;
 
-use cgmath::{Deg, Matrix4, Vector3};
+use cgmath::Deg;
 use stringreader::StringReader;
+
+use crate::prelude::*;
 
 const PIXELS_PER_SIDE: u32 = 64;
 const FACE_COUNT: u32 = 6;
@@ -14,7 +16,7 @@ pub struct CubeModel {
     pub face_count: u32,
     pub face_vertices: Vec<FaceVertex>,
     pub face_indices: Vec<u32>,
-    pub face_xforms: Vec<Matrix4<f32>>,
+    pub face_xforms: Vec<Mat4>,
 
     pub edge_vertices: Vec<EdgeVertex>,
     pub edge_indices: Vec<u32>,
@@ -131,43 +133,42 @@ impl CubeModel {
         out.face_indices.push(2);
         out.face_indices.push(3);
 
-        let z = Vector3::<f32>::unit_z();
-        let tran =
-            Matrix4::<f32>::from_translation((HFL + FACE_DISPLACEMENT_MM) * z);
+        let z = Vec3::unit_z();
+        let tran = Mat4::from_translation((HFL + FACE_DISPLACEMENT_MM) * z);
 
         {
             // 1: left
-            let rot1 = Matrix4::from_angle_z(Deg::<f32>(180.0));
-            let rot2 = Matrix4::from_angle_y(Deg::<f32>(-90.0));
+            let rot1 = Mat4::from_angle_z(Deg(180.0));
+            let rot2 = Mat4::from_angle_y(Deg(-90.0));
             out.face_xforms.push(rot2 * rot1 * tran);
         }
         {
             // 2: front
-            let rot1 = Matrix4::from_angle_z(Deg::<f32>(180.0));
+            let rot1 = Mat4::from_angle_z(Deg(180.0));
             out.face_xforms.push(rot1 * tran);
         }
         {
             // 3: right
-            let rot1 = Matrix4::from_angle_z(Deg::<f32>(180.0));
-            let rot2 = Matrix4::from_angle_y(Deg::<f32>(90.0));
+            let rot1 = Mat4::from_angle_z(Deg(180.0));
+            let rot2 = Mat4::from_angle_y(Deg(90.0));
             out.face_xforms.push(rot2 * rot1 * tran);
         }
         {
             // 4: bottom
-            let rot1 = Matrix4::from_angle_z(Deg::<f32>(90.0));
-            let rot2 = Matrix4::from_angle_x(Deg::<f32>(90.0));
+            let rot1 = Mat4::from_angle_z(Deg(90.0));
+            let rot2 = Mat4::from_angle_x(Deg(90.0));
             out.face_xforms.push(rot2 * rot1 * tran);
         }
         {
             // 5: back
-            let rot1 = Matrix4::from_angle_z(Deg::<f32>(90.0));
-            let rot2 = Matrix4::from_angle_x(Deg::<f32>(180.0));
+            let rot1 = Mat4::from_angle_z(Deg(90.0));
+            let rot2 = Mat4::from_angle_x(Deg(180.0));
             out.face_xforms.push(rot2 * rot1 * tran);
         }
         {
             // 6: top
-            let rot1 = Matrix4::from_angle_z(Deg::<f32>(90.0));
-            let rot2 = Matrix4::from_angle_x(Deg::<f32>(-90.0));
+            let rot1 = Mat4::from_angle_z(Deg(90.0));
+            let rot2 = Mat4::from_angle_x(Deg(-90.0));
             out.face_xforms.push(rot2 * rot1 * tran);
         }
 
