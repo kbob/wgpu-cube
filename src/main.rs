@@ -52,6 +52,8 @@ fn create_forward_render_pipeline(
     depth_format: Option<wgpu::TextureFormat>,
     vertex_layouts: &[wgpu::VertexBufferLayout],
     shader: &wgpu::ShaderModuleDescriptor,
+    vertex_entry: &str,
+    fragment_entry: &str,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(shader);
 
@@ -60,7 +62,7 @@ fn create_forward_render_pipeline(
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: &shader,
-            entry_point: "vs_main",
+            entry_point: vertex_entry,
             buffers: vertex_layouts,
         },
         primitive: wgpu::PrimitiveState {
@@ -92,7 +94,7 @@ fn create_forward_render_pipeline(
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: "fs_main",
+            entry_point: fragment_entry,
             targets: &[wgpu::ColorTargetState {
                 format: color_format,
                 blend: Some(match ALPHA_BLENDING {
@@ -112,6 +114,7 @@ fn create_shadow_render_pipeline(
     layout: &wgpu::PipelineLayout,
     vertex_layouts: &[wgpu::VertexBufferLayout],
     shader: &wgpu::ShaderModuleDescriptor,
+    vertex_entry: &str,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(shader);
 
@@ -120,7 +123,7 @@ fn create_shadow_render_pipeline(
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: &shader,
-            entry_point: "vs_shadow_main",
+            entry_point: vertex_entry,
             buffers: vertex_layouts,
         },
         primitive: wgpu::PrimitiveState {
@@ -323,11 +326,9 @@ impl State {
         let shadow_pass_bind_group = shadow_pass_bindings
             .create_bind_group(&device, lights.shadow_uniform_resource());
 
-        // Shaders
+        // Shader(s)
 
-        let cube_face_shader = wgpu::include_wgsl!("cube_face_shader.wgsl");
-        let cube_edge_shader = wgpu::include_wgsl!("cube_edge_shader.wgsl");
-        let floor_shader = wgpu::include_wgsl!("floor_shader.wgsl");
+        let common_shader = wgpu::include_wgsl!("common_shader.wgsl");
 
         let cube_face_forward_pipeline = {
             let layout = device.create_pipeline_layout(
@@ -351,7 +352,9 @@ impl State {
                     cube_model::FaceVertex::desc(),
                     cube::FaceStaticInstanceRaw::desc(),
                 ],
-                &cube_face_shader,
+                &common_shader,
+                "vs_cube_face_main",
+                "fs_cube_face_main",
             )
         };
 
@@ -374,7 +377,9 @@ impl State {
                 config.format,
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[cube_model::EdgeVertex::desc()],
-                &cube_edge_shader,
+                &common_shader,
+                "vs_cube_edge_main",
+                "fs_cube_edge_main",
             )
         };
 
@@ -397,7 +402,9 @@ impl State {
                 config.format,
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[floor::FloorVertexRaw::desc()],
-                &floor_shader,
+                &common_shader,
+                "vs_floor_main",
+                "fs_floor_main",
             )
         };
 
@@ -421,7 +428,8 @@ impl State {
                     cube_model::FaceVertex::desc(),
                     cube::FaceStaticInstanceRaw::desc(),
                 ],
-                &cube_face_shader,
+                &common_shader,
+                "vs_cube_face_shadow_main",
             )
         };
 
@@ -442,7 +450,8 @@ impl State {
                 &device,
                 &layout,
                 &[cube_model::EdgeVertex::desc()],
-                &cube_edge_shader,
+                &common_shader,
+                "vs_cube_edge_shadow_main",
             )
         };
 
@@ -463,7 +472,8 @@ impl State {
                 &device,
                 &layout,
                 &[floor::FloorVertexRaw::desc()],
-                &floor_shader,
+                &common_shader,
+                "vs_floor_shadow_main",
             )
         };
 
