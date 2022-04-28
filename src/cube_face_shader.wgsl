@@ -134,7 +134,7 @@ fn lambert_diffuse(
     return max(0.0, dot(normal, light_dir)) * light_color;
 }
 
-fn fifth(x: f32) -> f32 {
+fn fifth_power(x: f32) -> f32 {
     let square = x * x;
     return square + square * x;
 }
@@ -156,8 +156,8 @@ fn burley_diffuse(
     let cos_theta_d = dot(light_dir, half_dir);
     let fd90 = 0.5 + 2.0 * material_roughness * cos_theta_d * cos_theta_d;
     let f1 = 1.0 / 3.1415927;
-    let f2 = 1.0 + (fd90 - 1.0) * fifth(1.0 - cos_theta_l);
-    let f3 = 1.0 + (fd90 - 1.0) * fifth(1.0 - cos_theta_v);
+    let f2 = 1.0 + (fd90 - 1.0) * fifth_power(1.0 - cos_theta_l);
+    let f3 = 1.0 + (fd90 - 1.0) * fifth_power(1.0 - cos_theta_v);
     return f1 * f2 * f3;
 }
 

@@ -191,10 +191,10 @@ Rotation math.  Hurts head but with "interactive video".
 ## Deferred Rendering
 
 ### **[Deferred Shading](https://learnopengl.com/Advanced-Lighting/Deferred-Shading)**
-*Learn OpenGl*
+*Learn OpenGl*<br>
 Explains deferred shading and implements it in OpenGL.
 
-### **Deferred Shading**
+### **[Deferred Shading](https://ogldev.org/www/tutorial35/tutorial35.html)**
 *Etay Meiri, OGL dev*<br>
 Another deferred shading tutorial in OpenGL.<br>
 [Part 1](https://ogldev.org/www/tutorial35/tutorial35.html)<br>
@@ -224,7 +224,6 @@ How to multisample a shadow map for smooth edges
 DOI:10.1109/TVCG.2004.1260772<br>
 Reviews and compares three trackball models.
 
-There's another paper on 
 ### **[Virtual Trackballs and the Exponential Map](http://math.umd.edu/~gogo/Papers/trackballExp.pdf)**
 *Stantchev, U. of Maryland*<br>
 This appears to be a good trackball model.
