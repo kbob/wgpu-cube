@@ -23,8 +23,17 @@ impl TestPattern {
     }
 
     pub fn next_frame(&mut self) -> &PixelArray {
-        self.write_row_column(self.frame_number, 0u8);
-        if self.frame_number == usize::MAX {
+        // self.write_row_column(self.frame_number, 0u8);
+        self.write_row_column(self.frame_number + SIDE - 7, 0u8);
+        self.write_row_column(self.frame_number + SIDE - 6, 255u8);
+        self.write_row_column(self.frame_number + SIDE - 5, 127u8);
+        self.write_row_column(self.frame_number + SIDE - 4, 63u8);
+        self.write_row_column(self.frame_number + SIDE - 3, 31u8);
+        self.write_row_column(self.frame_number + SIDE - 2, 31u8);
+        self.write_row_column(self.frame_number + SIDE - 1, 63u8);
+        self.write_row_column(self.frame_number + SIDE - 0, 127u8);
+
+        if self.frame_number == usize::MAX / 2 {
             self.frame_number = 0;
         } else {
             self.frame_number += 1;
