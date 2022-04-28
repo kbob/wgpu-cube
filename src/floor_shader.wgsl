@@ -320,8 +320,8 @@ fn floor_color(
         let half_dir = normalize(view_dir + light_dir);
 
         // let s1 = fetch_shadow(i, light.proj * world_pos);
-        let shadow = fetch_shadow4(i, light.proj * world_pos);
-        // let shadow = fetch_shadow16(i, light.proj * world_pos);
+        // let shadow = fetch_shadow4(i, light.proj * world_pos);
+        let shadow = fetch_shadow16(i, light.proj * world_pos);
         // let shadow = 0.5 + s1 - s16;
     
 
