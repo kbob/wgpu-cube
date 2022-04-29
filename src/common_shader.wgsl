@@ -480,7 +480,6 @@ fn face_color(
 
         let shadow = fetch_shadow(i, light.proj * world_pos);
 
-        // let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
         let diffuse = burley_diffuse(
             cube_face_material_roughness,
             normal,
@@ -535,8 +534,8 @@ fn fs_cube_face_main(in: CubeFaceVertexOutput) -> [[location(0)]] vec4<f32> {
 // ----  Cube Edge Fragment Shader  - ---- ---- ---- ---- ---- ---- ----
 
 // let cube_edge_material_color = vec4<f32>(0.718, 0.055, 0.0, 1.0);
-let cube_edge_material_color = vec4<f32>(0.0, 0.99, 1.0, 1.0);
-// let cube_edge_material_color = vec4<f32>(0.05, 0.05, 0.05, 1.0);
+// let cube_edge_material_color = vec4<f32>(0.0, 0.99, 1.0, 1.0);
+let cube_edge_material_color = vec4<f32>(0.05, 0.05, 0.05, 1.0);
 let cube_edge_material_roughness = 0.1;
 
 fn edge_color(
@@ -558,7 +557,6 @@ fn edge_color(
 
         let shadow = fetch_shadow(i, light.proj * world_pos);
 
-        // let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
         let diffuse = burley_diffuse(
             cube_edge_material_roughness,
             normal,
@@ -606,8 +604,8 @@ fn floor_color(
 ) -> vec4<f32> {
     let material_color =
         textureSample(t_floor_decal, s_floor_decal, tex_coord).rgb * 0.3;
-    // let material_color = material_color * vec3<f32>(0.4, 1.0, 1.0);
-    let material_color = material_color * vec3<f32>(1.0, 0.6, 0.4);
+    // let material_color = material_color * vec3<f32>(0.4, 1.0, 1.0); // teal
+    // let material_color = material_color * vec3<f32>(1.0, 0.6, 0.4); // orange
 
     var color = vec3<f32>(0.0);
 
@@ -622,7 +620,6 @@ fn floor_color(
 
         let shadow = fetch_shadow16(i, light.proj * world_pos);
     
-        // let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
         let diffuse = burley_diffuse(
             floor_material_roughness,
             normal,

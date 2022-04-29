@@ -202,13 +202,13 @@ pub struct CubeFacePreparedData {
 }
 
 pub struct CubeFaceAttributes {
-    pub frame_time: f32,
+    pub frame_count: u32,
 }
 
 impl Renderable<CubeFaceAttributes, CubeFacePreparedData> for Cube {
     fn prepare(&self, attr: &CubeFaceAttributes) -> CubeFacePreparedData {
-        let phase = attr.frame_time as i32 % 2;
-        let frac = attr.frame_time % 1.0;
+        let phase = attr.frame_count / 64 % 2;
+        let frac = (attr.frame_count % 64) as f32 / 64.0;
         let brightness = if phase == 0 {
             frac * frac
         } else {

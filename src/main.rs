@@ -209,7 +209,7 @@ struct State {
     frame_bind_group: wgpu::BindGroup,
     shadow_pass_bind_group: wgpu::BindGroup,
     forward_pass_bind_group: wgpu::BindGroup,
-    first_frame_time: Option<std::time::Instant>,
+    frame_count: u32,
 }
 
 impl State {
@@ -477,7 +477,7 @@ impl State {
             )
         };
 
-        let first_frame_time = None;
+        let frame_count = 0;
 
         // Results
 
@@ -505,7 +505,7 @@ impl State {
             frame_bind_group,
             forward_pass_bind_group,
             shadow_pass_bind_group,
-            first_frame_time,
+            frame_count,
         }
     }
 
@@ -539,6 +539,7 @@ impl State {
 
     pub fn update(&mut self) {
         let now = std::time::Instant::now();
+        self.frame_count += 1;
         let cube_to_world = self.cube_trackball.orientation(now);
         self.cube.update_transform(&cube_to_world);
         self.blinky.update();
@@ -567,11 +568,7 @@ impl State {
             self.blinky.prepare(&blinky::BlinkyAttributes {});
         let cube_face_prepared_data =
             self.cube.prepare(&cube::CubeFaceAttributes {
-                frame_time: self
-                    .first_frame_time
-                    .get_or_insert_with(|| std::time::Instant::now())
-                    .elapsed()
-                    .as_secs_f32(),
+                frame_count: self.frame_count,
             });
         let cube_edge_prepared_data =
             self.cube.prepare(&cube::CubeEdgeAttributes {});
