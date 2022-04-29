@@ -67,7 +67,7 @@ struct CubeFaceVertexInput {
 
 struct CubeFaceVertexOutput {
     [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(0), interpolate(perspective, sample)]] world_position: vec3<f32>;
+    [[location(0), interpolate(perspective, sample)]] world_position: vec4<f32>;
     [[location(1), interpolate(perspective, sample)]] normal: vec3<f32>;
     [[location(2), interpolate(perspective, sample)]] decal_coords: vec2<f32>;
 };
@@ -96,7 +96,7 @@ fn vs_cube_face_main(
 
     var out: CubeFaceVertexOutput;
     out.clip_position = view_pos;
-    out.world_position = world_pos.xyz;
+    out.world_position = world_pos;
     out.normal = normal;
     out.decal_coords = instance.decal_offset + model.decal_coords;
     return out;
@@ -132,7 +132,7 @@ struct CubeEdgeVertexInput {
 
 struct CubeEdgeVertexOutput {
     [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(0)]] world_position: vec3<f32>;
+    [[location(0)]] world_position: vec4<f32>;
     [[location(1)]] normal: vec3<f32>;
 };
 
@@ -150,7 +150,7 @@ fn vs_cube_edge_main(
 
     var out: CubeEdgeVertexOutput;
     out.clip_position = pos;
-    out.world_position = world_pos.xyz;
+    out.world_position = world_pos;
     out.normal = normal;
     return out;
 }
@@ -457,16 +457,16 @@ let led_base_color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
 let led_r2: f32 = 0.15;
 let led_bleed_r2: f32 = 0.20;
 
-
 fn face_color(
     tex_index: vec2<i32>,
     normal: vec3<f32>,
     view_dir: vec3<f32>,
+    world_pos: vec4<f32>,
 ) -> vec4<f32> {
     var decal_pixel = vec4<f32>(textureLoad(t_decal, tex_index, 0));
     decal_pixel = cube.decal_visibility * decal_pixel;
     var material_color = cube_face_base_color.rgb;
-    material_color = max(material_color, 2.0 * decal_pixel.rgb);
+    material_color = max(material_color, 1.0 * decal_pixel.rgb);
     var color = vec3<f32>(0.0);
 
     // Ambient
@@ -477,6 +477,8 @@ fn face_color(
         let light = lights.lights[i];
         let light_dir = normalize(light.direction.xyz);
         let half_dir = normalize(view_dir + light_dir);
+
+        let shadow = fetch_shadow(i, light.proj * world_pos);
 
         // let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
         let diffuse = burley_diffuse(
@@ -493,7 +495,7 @@ fn face_color(
             view_dir,
             half_dir,
         );
-        color = color + material_color * (diffuse + specular);
+        color = color + shadow * material_color * (diffuse + specular);
     }
     let alpha = cube_face_base_color.a * decal_pixel.a;
     return vec4<f32>(color, alpha);
@@ -515,9 +517,9 @@ fn fs_cube_face_main(in: CubeFaceVertexOutput) -> [[location(0)]] vec4<f32> {
     let tex_index = vec2<i32>(pix_center);
 
     let normal = normalize(in.normal);
-    let view_dir = normalize(camera.view_position.xyz - in.world_position);
+    let view_dir = normalize(camera.view_position.xyz - in.world_position.xyz);
 
-    let face_color = face_color(tex_index, normal, view_dir);
+    let face_color = face_color(tex_index, normal, view_dir, in.world_position);
     let led_color = led_color(tex_index);
 
     let pix_pos = pix_coord - pix_center;
@@ -533,12 +535,14 @@ fn fs_cube_face_main(in: CubeFaceVertexOutput) -> [[location(0)]] vec4<f32> {
 // ----  Cube Edge Fragment Shader  - ---- ---- ---- ---- ---- ---- ----
 
 // let cube_edge_material_color = vec4<f32>(0.718, 0.055, 0.0, 1.0);
-let cube_edge_material_color = vec4<f32>(0.05, 0.05, 0.05, 1.0);
+let cube_edge_material_color = vec4<f32>(0.0, 0.99, 1.0, 1.0);
+// let cube_edge_material_color = vec4<f32>(0.05, 0.05, 0.05, 1.0);
 let cube_edge_material_roughness = 0.1;
 
 fn edge_color(
     normal: vec3<f32>,
     view_dir: vec3<f32>,
+    world_pos: vec4<f32>,
 ) -> vec4<f32> {
     var color = vec3<f32>(0.0);
     var material_color = cube_edge_material_color.rgb;
@@ -551,6 +555,8 @@ fn edge_color(
         let light = lights.lights[i];
         let light_dir = normalize(light.direction.xyz);
         let half_dir = normalize(view_dir + light_dir);
+
+        let shadow = fetch_shadow(i, light.proj * world_pos);
 
         // let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
         let diffuse = burley_diffuse(
@@ -567,7 +573,7 @@ fn edge_color(
             view_dir,
             half_dir,
         );
-        color = color + material_color * (diffuse + specular);
+        color = color + shadow * material_color * (diffuse + specular);
     }
     return vec4<f32>(color, cube_edge_material_color.a);
 }
@@ -575,9 +581,9 @@ fn edge_color(
 [[stage(fragment)]]
 fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
     let normal = normalize(in.normal);
-    let view_dir = normalize(camera.view_position.xyz - in.world_position);
+    let view_dir = normalize(camera.view_position.xyz - in.world_position.xyz);
 
-    let color = edge_color(normal, view_dir);
+    let color = edge_color(normal, view_dir, in.world_position);
     return color;
 }
 
@@ -600,6 +606,8 @@ fn floor_color(
 ) -> vec4<f32> {
     let material_color =
         textureSample(t_floor_decal, s_floor_decal, tex_coord).rgb * 0.3;
+    // let material_color = material_color * vec3<f32>(0.4, 1.0, 1.0);
+    let material_color = material_color * vec3<f32>(1.0, 0.6, 0.4);
 
     var color = vec3<f32>(0.0);
 
@@ -612,12 +620,8 @@ fn floor_color(
         let light_dir = normalize(light.direction.xyz);
         let half_dir = normalize(view_dir + light_dir);
 
-        // let s1 = fetch_shadow(i, light.proj * world_pos);
-        // let shadow = fetch_shadow4(i, light.proj * world_pos);
         let shadow = fetch_shadow16(i, light.proj * world_pos);
-        // let shadow = 0.5 + s1 - s16;
     
-
         // let diffuse = lambert_diffuse(light.color.rgb, normal, light_dir);
         let diffuse = burley_diffuse(
             floor_material_roughness,
