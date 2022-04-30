@@ -37,6 +37,9 @@ struct ShadowUniform {
 [[group(2), binding(0)]]
 var<uniform> shadow: ShadowUniform;
 
+let TAU: f32 = 6.283185307179586;
+let PI: f32 = 3.141592653589793;
+
 
 // ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ====
 // ====  Vertex Shaders
@@ -217,6 +220,186 @@ var t_shadow_maps: texture_depth_2d_array;
 var s_shadow_maps: sampler_comparison;
 
 
+// ----  "Disney" BRDF  --- ---- ---- ---- ---- ---- ---- ---- ---- ----
+
+struct Material {
+    base_color: vec3<f32>;
+    subsurface: f32;
+    metallic: f32;
+    specular: f32;
+    specular_tint: f32;
+    roughness: f32;
+    anisotropic: f32;
+    sheen: f32;
+    sheen_tint: f32;
+    clearcoat: f32;
+    clearcoat_gloss: f32;
+};
+
+fn material_defaults() -> Material {
+    var out: Material;
+    out.base_color = vec3<f32>(0.82, 0.67, 0.16);
+    out.subsurface = 0.0;
+    out.metallic = 0.0;
+    out.specular = 0.5;
+    out.specular_tint = 0.0;
+    out.roughness = 0.5;
+    out.anisotropic = 0.0;
+    out.sheen = 0.5;
+    out.sheen_tint = 0.5;
+    out.clearcoat = 0.0;
+    out.clearcoat_gloss = 1.0;
+    return out;
+}
+
+fn sqr(x: f32) -> f32 {
+    return x * x;
+}
+
+fn schlick_fresnel(u: f32) -> f32 {
+    let m = clamp(1.0 - u, 0.0, 1.0);
+    let m2 = m * m;
+    return m2 * m2 * m; // pow(m, 5)
+}
+
+// generalized Trowbridge-Reitz distribution, gamma=1
+fn gtr1(NdotH: f32, a: f32) -> f32 {
+    if (a >= 1.0) {
+        return 1.0 / PI;
+    }
+    let a2 = a * a;
+    let t = 1.0 + (a2 - 1.0) * NdotH * NdotH;
+    return (a2 - 1.0) / (PI * log(a2) * t);
+}
+
+// generalized Trowbridge-Reitz distribution, gamma=2
+fn gtr2(NdotH: f32, a: f32) -> f32 {
+    let a2 = a * a;
+    let t = 1.0 + (a2 - 1.0) * NdotH * NdotH;
+    return a2 / (PI * t * t);
+}
+
+fn gtr2_aniso(NdotH: f32, HdotX: f32, HdotY: f32, ax: f32, ay: f32) -> f32 {
+    return 1.0
+        / (PI
+            * ax
+            * ay
+            * sqr(sqr(HdotX / ax) + sqr(HdotY / ay) * NdotH * NdotH));
+}
+
+fn smithg_ggx(NdotV: f32, alphaG: f32) -> f32 {
+    let a = alphaG * alphaG;
+    let b = NdotV * NdotV;
+    return 1.0 / (NdotV + sqrt(a + b +- a * b));
+}
+
+fn smithg_ggx_aniso(
+    NdotV: f32,
+    VdotX: f32,
+    VdotY: f32,
+    ax: f32,
+    ay: f32,
+) -> f32 {
+    return 1.0
+        / (NdotV +
+            sqrt(sqr(VdotX * ax) + sqr(VdotY * ay) + sqr(NdotV)));
+}
+
+fn mon2lin(x: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(pow(x[0], 2.2), pow(x[1], 2.2), pow(x[2], 2.2));
+}
+
+fn disney_brdf(
+    material: Material,
+    L: vec3<f32>,
+    V: vec3<f32>,
+    N: vec3<f32>,
+    X: vec3<f32>,
+    Y: vec3<f32>,
+) -> vec3<f32> {
+    let NdotL = dot(N, L);
+    let NdotV = dot(N, V);
+    if (NdotL < 0.0 || NdotV < 0.0) {
+        return vec3<f32>(0.0);
+    }
+
+    let H = normalize(L + V);
+    let NdotH = dot(N, H);
+    let LdotH = dot(L, H);
+
+    let Cdlin = mon2lin(material.base_color);
+    // luminance approx.
+    let Cdlum = 0.3 * Cdlin[0] + 0.6 * Cdlin[1] + 0.1 * Cdlin[2];
+
+    var Ctint: vec3<f32> = vec3<f32>(1.0);
+    if (Cdlum > 0.0) {
+        Ctint = Cdlin / Cdlum;
+    }
+    let Cspec0 = mix(
+        material.specular * 0.08 * mix(
+            vec3<f32>(1.0),
+            Ctint,
+            material.specular_tint,
+        ),
+        Cdlin,
+        material.metallic,
+    );
+    let Csheen = mix(vec3<f32>(1.0), Ctint, material.sheen_tint);
+
+    // Diffuse fresnel - go from 1 at normal incidence to .5 at grazing
+    // and mix in diffuse retro-reflection based on roughness.
+    let FL = schlick_fresnel(NdotL);
+    let FV = schlick_fresnel(NdotV);
+    let Fd90 = 0.5 + 2.0 * LdotH * LdotH * material.roughness;
+    let Fd = mix(1.0, Fd90, FL) * mix(1.0, Fd90, FV);
+
+    // Based on Hanrahan-Krueger brdf approximation of isotropic bssrdf
+    // 1.25 scale is used to (roughly) preserve albedo
+    // Fss90 used to "flatten" retroreflection based on roughness
+    let Fss90 = LdotH * LdotH * material.roughness;
+    let Fss = mix(1.0, Fss90, FL) * mix(1.0, Fss90, FV);
+    let ss = 1.25 * (Fss * (1.0 / (NdotL + NdotV) - 0.5) + 0.5);
+
+    // specular
+    let aspect = sqrt(1.0 - material.anisotropic * 0.9);
+    let ax = max(0.001, sqr(material.roughness) / aspect);
+    let ay = max(0.001, sqr(material.roughness) * aspect);
+    let Ds = gtr2_aniso(NdotH, dot(H, X), dot(H, Y), ax, ay);
+    // let Ds = gtr2(NdotH, max(0.001, sqr(material.roughness))); // XXX
+
+    let FH = schlick_fresnel(LdotH);
+    let Fs = mix(Cspec0, vec3<f32>(1.0), FH);
+    let Gs = smithg_ggx_aniso(NdotL, dot(L, X), dot(L, Y), ax, ay)
+        * smithg_ggx_aniso(NdotV, dot(V, X), dot(V, Y), ax, ay);
+
+    // sheen
+    let Fsheen = FH * material.sheen * Csheen;
+
+    // clearcoat (index of reflection = 1.5 -> F0 = 0.04)
+    let Dr = gtr1(NdotH, mix(0.1, 0.001, material.clearcoat_gloss));
+    let Fr = mix(0.04, 1.0, FH);
+    let Gr = smithg_ggx(NdotL, 0.25) * smithg_ggx(NdotV, 0.25);
+
+    // return ((1.0 / PI) * mix(Fd, ss, material.subsurface) * Cdlin + Fsheen)
+    //     * (1.0 - material.metallic)
+    //     + Gs * Fs * Ds + .25 * material.clearcoat * Gr * Fr * Dr;
+
+    let a = 1.0 / PI;
+    let b = mix(Fd, ss, material.subsurface) * Cdlin;
+    let c = Fsheen;
+    let d = 1.0 - material.metallic;
+    let e = Gs * Fs * Ds;
+    let f = .25 * material.clearcoat;
+    let g = Gr  * Fr * Dr;
+    // let a: f32 = 0.0;
+    // let e: f32 = 0.0;
+    // let f: f32 = 0.0;
+    // if (true) { return vec3<f32>(Ds * 0.01); }
+    // if (Ds > 1.0) { return vec3<f32>(0.0, 1.0, 0.0); }
+    return ((a * b + c) * d) + e + (f * g);
+}
+
+
 // ----  Common Fragment Shader Functions  ---- ---- ---- ---- ---- ----
 
 fn lambert_diffuse(
@@ -248,6 +431,9 @@ fn burley_diffuse(
     let cos_theta_l = dot(light_dir, normal);
     let cos_theta_v = dot(view_dir, normal);
     let cos_theta_d = dot(light_dir, half_dir);
+    if (cos_theta_l < 0.0 || cos_theta_v < 0.0) {
+        return 0.0;
+    }
     let fd90 = 0.5 + 2.0 * material_roughness * cos_theta_d * cos_theta_d;
     let f1 = 1.0 / 3.1415927;
     let f2 = 1.0 + (fd90 - 1.0) * fifth_power(1.0 - cos_theta_l);
@@ -459,8 +645,67 @@ let led_bleed_r2: f32 = 0.20;
 
 fn face_color(
     tex_index: vec2<i32>,
-    normal: vec3<f32>,
-    view_dir: vec3<f32>,
+    N: vec3<f32>,
+    V: vec3<f32>,
+    world_pos: vec4<f32>,
+) -> vec4<f32> {
+    let X = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), N));
+    let Y = normalize(cross(N, X));
+
+    let decal_pixel = vec4<f32>(textureLoad(t_decal, tex_index, 0));
+
+    var material = material_defaults();
+    material.base_color = vec3<f32>(0.2);
+    material.specular = 0.0;
+    material.roughness = 1.0;
+    if (dot(decal_pixel, decal_pixel) != 1.0) {
+        material.base_color = decal_pixel.rgb * 3.0 ;// * cube_decal.visibility;
+        material.metallic = 1.0;
+        material.specular = 0.5;
+        material.specular_tint = 1.0;
+        material.anisotropic = 0.5;
+    }
+
+    var color = vec3<f32>(0.0);
+    for (var i = 1u; i < lights.count; i = i + 1u) {
+        let light = lights.lights[i];
+        let L = normalize(light.direction.xyz);
+
+        let shadow: f32 = 1.0;
+
+        let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
+        color = color + dot(L, N) * light.color.rgb * b;
+
+    }
+    return vec4<f32>(color, 1.0);
+
+
+    // var material_color = cube_face_base_color.rgb;
+    // material_color = max(material_color, 1.0 * decal_pixel.rgb);
+    // let 
+
+    // var material: Material = material_defaults();
+    // // material.base_color = vec3<f32>(0.5);
+    // material.base_color = vec3<f32>(0.2);
+    // material.specular = 0.0;
+    // material.specular_tint = 1.0;
+    // material.roughness = 1.0;
+    // material.sheen = 0.0;
+    // var color = vec3<f32>(0.0);
+    // for (var i = 1u; i < lights.count; i = i + 1u) {
+    //     let light = lights.lights[i];
+    //     let L = normalize(light.direction.xyz);
+
+    //     let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
+    //     color = color + dot(N, L) * b;
+    // }
+    // return vec4<f32>(color, 1.0);
+}
+
+fn XXXface_color(
+    tex_index: vec2<i32>,
+    N: vec3<f32>,
+    V: vec3<f32>,
     world_pos: vec4<f32>,
 ) -> vec4<f32> {
     var decal_pixel = vec4<f32>(textureLoad(t_decal, tex_index, 0));
@@ -475,24 +720,26 @@ fn face_color(
     // Directional lights
     for (var i = 1u; i < lights.count; i = i + 1u) {
         let light = lights.lights[i];
-        let light_dir = normalize(light.direction.xyz);
-        let half_dir = normalize(view_dir + light_dir);
+        let L = normalize(light.direction.xyz);
+        let H = normalize(V + L);
 
-        let shadow = fetch_shadow(i, light.proj * world_pos);
+        // shadow just adds shadow acne artifacts.  Skip it.
+        // let shadow = fetch_shadow(i, light.proj * world_pos);
+        let shadow = 1.0;
 
         let diffuse = burley_diffuse(
             cube_face_material_roughness,
-            normal,
-            light_dir,
-            view_dir,
-            half_dir,
+            N,
+            L,
+            V,
+            H,
         );
         let specular = blinn_phong_specular(
             light.color.rgb,
-            normal,
-            light_dir,
-            view_dir,
-            half_dir,
+            N,
+            L,
+            V,
+            H,
         );
         color = color + shadow * material_color * (diffuse + specular);
     }
@@ -506,6 +753,30 @@ fn led_color(
     let blinky_color = vec4<f32>(textureLoad(t_blinky, tex_index, 0)) / 255.0;
     let led_color = max(led_base_color, blinky_color);
     return led_color;
+}
+
+[[stage(fragment)]]
+fn YYYfs_cube_face_main(in: CubeFaceVertexOutput) -> [[location(0)]] vec4<f32> {
+    let N = normalize(in.normal);
+    let X = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), N));
+    let Y = normalize(cross(N, X));
+    let V = normalize(camera.view_position.xyz - in.world_position.xyz);
+
+    var material: Material = material_defaults();
+    // material.base_color = vec3<f32>(0.5);
+    material.base_color = vec3<f32>(0.2);
+    material.specular = 0.0;
+    material.roughness = 1.0;
+    material.sheen = 0.0;
+    var color = vec3<f32>(0.0);
+    for (var i = 1u; i < lights.count; i = i + 1u) {
+        let light = lights.lights[i];
+        let L = normalize(light.direction.xyz);
+
+        let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
+        color = color + dot(L, N) * light.color.rgb * b;
+    }
+    return vec4<f32>(color, 1.0);
 }
 
 [[stage(fragment)]]
@@ -555,7 +826,9 @@ fn edge_color(
         let light_dir = normalize(light.direction.xyz);
         let half_dir = normalize(view_dir + light_dir);
 
-        let shadow = fetch_shadow(i, light.proj * world_pos);
+        // shadow just adds shadow acne artifacts.  Skip it.
+        // let shadow = fetch_shadow(i, light.proj * world_pos);
+        let shadow = 1.0;
 
         let diffuse = burley_diffuse(
             cube_edge_material_roughness,
@@ -578,6 +851,30 @@ fn edge_color(
 
 [[stage(fragment)]]
 fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
+    let N = normalize(in.normal);
+    let X = normalize(cross(N, vec3<f32>(1.0, 0.0, 0.0))); // arbitrary
+    let Y = normalize(cross(N, X));
+    let V = normalize(camera.view_position.xyz - in.world_position.xyz);
+
+    var material: Material = material_defaults();
+    material.base_color = vec3<f32>(0.0);
+    material.roughness = 0.05;
+    // material.clearcoat = 0.1;
+    var color = vec3<f32>(0.01);
+    for (var i = 1u; i < lights.count; i = i + 1u) {
+        let light = lights.lights[i];
+        let L = normalize(light.direction.xyz);
+
+        let shadow: f32 = 1.0;
+
+        let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
+        color = color + shadow * dot(L, N) * light.color.rgb * b;
+    }
+    return vec4<f32>(color, 1.0);
+}
+
+[[stage(fragment)]]
+fn XXXfs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
     let normal = normalize(in.normal);
     let view_dir = normalize(camera.view_position.xyz - in.world_position.xyz);
 
@@ -598,14 +895,19 @@ let floor_material_roughness: f32 = 0.6;
 
 fn floor_color(
     tex_coord: vec2<f32>,
-    normal: vec3<f32>,
-    view_dir: vec3<f32>,
+    N: vec3<f32>,
+    V: vec3<f32>,
     world_pos: vec4<f32>,
 ) -> vec4<f32> {
+    let X = normalize(cross(N, vec3<f32>(1.0, 0.0, 0.0))); // arbitrary
+    let Y = normalize(cross(N, X));
+
     let material_color =
         textureSample(t_floor_decal, s_floor_decal, tex_coord).rgb * 0.3;
-    // let material_color = material_color * vec3<f32>(0.4, 1.0, 1.0); // teal
-    // let material_color = material_color * vec3<f32>(1.0, 0.6, 0.4); // orange
+
+    var material = material_defaults();
+    material.base_color = material_color * 3.0;
+    material.roughness = 0.9;
 
     var color = vec3<f32>(0.0);
 
@@ -615,26 +917,29 @@ fn floor_color(
     // Directional lights
     for (var i = 1u; i < lights.count; i = i + 1u) {
         let light = lights.lights[i];
-        let light_dir = normalize(light.direction.xyz);
-        let half_dir = normalize(view_dir + light_dir);
+        let L = normalize(light.direction.xyz);
+        // let H = normalize(V + L);
 
         let shadow = fetch_shadow16(i, light.proj * world_pos);
-    
-        let diffuse = burley_diffuse(
-            floor_material_roughness,
-            normal,
-            light_dir,
-            view_dir,
-            half_dir,
-        );
-        let specular = blinn_phong_specular(
-            light.color.rgb,
-            normal,
-            light_dir,
-            view_dir,
-            half_dir,
-        );
-        color = color + material_color * shadow * (diffuse + specular);
+
+        let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
+        color = color + shadow * dot(L, N) * light.color.rgb * b;
+
+        // let diffuse = burley_diffuse(
+        //     floor_material_roughness,
+        //     N,
+        //     L,
+        //     V,
+        //     H,
+        // );
+        // let specular = blinn_phong_specular(
+        //     light.color.rgb,
+        //     N,
+        //     L,
+        //     V,
+        //     H,
+        // );
+        // color = color + material_color * shadow * (diffuse + specular);
     }
     return vec4<f32>(color, 1.0);
 }

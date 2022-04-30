@@ -247,6 +247,12 @@ Explains Disney Animation's PBR material model in 2012.<br>
 ### **[Advanced Lighting: Bloom](https://learnopengl.com/Advanced-Lighting/Bloom)**
 *Learn OpenGL*<br>
 
+## Shaders
+
+### **[The Book of Shaders](https://thebookofshaders.com)
+*Patricio Gonzalez Vivo, Jen Lowe*
+Noise, procedural textures, ray marching, and more.
+
 ## Tools
 
 ### **[Debugging with Xcode](https://github.com/gfx-rs/wgpu/wiki/Debugging-with-Xcode)**
