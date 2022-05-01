@@ -284,7 +284,7 @@ fn gtr2_aniso(NdotH: f32, HdotX: f32, HdotY: f32, ax: f32, ay: f32) -> f32 {
         / (PI
             * ax
             * ay
-            * sqr(sqr(HdotX / ax) + sqr(HdotY / ay) * NdotH * NdotH));
+            * sqr(sqr(HdotX / ax) + sqr(HdotY / ay) + NdotH * NdotH));
 }
 
 fn smithg_ggx(NdotV: f32, alphaG: f32) -> f32 {
