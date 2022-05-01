@@ -375,28 +375,29 @@ fn disney_brdf(
     // sheen
     let Fsheen = FH * material.sheen * Csheen;
 
-    // clearcoat (index of reflection = 1.5 -> F0 = 0.04)
+    // clearcoat (index of refraction = 1.5 -> F0 = 0.04)
     let Dr = gtr1(NdotH, mix(0.1, 0.001, material.clearcoat_gloss));
     let Fr = mix(0.04, 1.0, FH);
     let Gr = smithg_ggx(NdotL, 0.25) * smithg_ggx(NdotV, 0.25);
 
-    // return ((1.0 / PI) * mix(Fd, ss, material.subsurface) * Cdlin + Fsheen)
-    //     * (1.0 - material.metallic)
-    //     + Gs * Fs * Ds + .25 * material.clearcoat * Gr * Fr * Dr;
+    return ((1.0 / PI) * mix(Fd, ss, material.subsurface) * Cdlin + Fsheen)
+        * (1.0 - material.metallic)
+        + Gs * Fs * Ds
+        + 0.25 * material.clearcoat * Gr * Fr * Dr;
 
-    let a = 1.0 / PI;
-    let b = mix(Fd, ss, material.subsurface) * Cdlin;
-    let c = Fsheen;
-    let d = 1.0 - material.metallic;
-    let e = Gs * Fs * Ds;
-    let f = .25 * material.clearcoat;
-    let g = Gr  * Fr * Dr;
-    // let a: f32 = 0.0;
-    // let e: f32 = 0.0;
-    // let f: f32 = 0.0;
-    // if (true) { return vec3<f32>(Ds * 0.01); }
-    // if (Ds > 1.0) { return vec3<f32>(0.0, 1.0, 0.0); }
-    return ((a * b + c) * d) + e + (f * g);
+    // let a = 1.0 / PI;
+    // let b = mix(Fd, ss, material.subsurface) * Cdlin;
+    // let c = Fsheen;
+    // let d = 1.0 - material.metallic;
+    // let e = Gs * Fs * Ds;
+    // let f = .25 * material.clearcoat;
+    // let g = Gr  * Fr * Dr;
+    // // let a: f32 = 0.0;
+    // // let e: f32 = 0.0;
+    // // let f: f32 = 0.0;
+    // // if (true) { return vec3<f32>(Ds * 0.01); }
+    // // if (Ds > 1.0) { return vec3<f32>(0.0, 1.0, 0.0); }
+    // return ((a * b + c) * d) + e + (f * g);
 }
 
 
@@ -656,17 +657,21 @@ fn face_color(
 
     var material = material_defaults();
     material.base_color = vec3<f32>(0.2);
-    material.specular = 0.0;
-    material.roughness = 1.0;
+    material.specular = 0.15;
+    material.roughness = 0.4;
     if (dot(decal_pixel, decal_pixel) != 1.0) {
-        material.base_color = decal_pixel.rgb * 3.0 ;// * cube_decal.visibility;
-        material.metallic = 1.0;
-        material.specular = 0.5;
+        material.base_color = decal_pixel.rgb;
+        material.metallic = 0.8;
+        material.specular = 0.4;
+        material.roughness = 0.15;
         material.specular_tint = 1.0;
-        material.anisotropic = 0.5;
     }
 
     var color = vec3<f32>(0.0);
+
+    // Ambient
+    color = color + lights.lights[0].color.rgb * material.base_color;
+
     for (var i = 1u; i < lights.count; i = i + 1u) {
         let light = lights.lights[i];
         let L = normalize(light.direction.xyz);
