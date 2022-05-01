@@ -66,7 +66,7 @@ struct LightsUniformRaw {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
 struct ShadowUniformRaw {
-    proj: [[f32; 4]; 4],
+    world_to_clip: [[f32; 4]; 4],
 }
 
 enum Light {
@@ -216,7 +216,7 @@ impl Lights {
                 let end = offset + raw_size;
                 *bytemuck::from_bytes_mut::<ShadowUniformRaw>(
                     &mut data[offset..end],
-                ) = ShadowUniformRaw { proj: proj.into() };
+                ) = ShadowUniformRaw { world_to_clip: proj.into() };
             }
 
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {

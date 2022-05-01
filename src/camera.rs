@@ -23,7 +23,7 @@ pub const LEFT_HAND_TO_WGPU_MATRIX: Mat4 = Mat4::new(
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraUniformRaw {
     view_position: [f32; 4],
-    view_proj: [[f32; 4]; 4],
+    world_to_clip: [[f32; 4]; 4],
 }
 
 pub struct Camera {
@@ -48,7 +48,7 @@ impl Camera {
     ) -> Self {
         let uniform_raw = CameraUniformRaw {
             view_position: [0.0, 0.0, 0.0, 0.0],
-            view_proj: Mat4::identity().into(),
+            world_to_clip: Mat4::identity().into(),
         };
         let uniform_buffer =
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -108,7 +108,7 @@ impl Renderable<CameraAttributes, CameraPreparedData> for Camera {
         CameraPreparedData {
             camera_uniform: CameraUniformRaw {
                 view_position: self.eye.to_homogeneous().into(),
-                view_proj: self.build_view_projection_matrix().into(),
+                world_to_clip: self.build_view_projection_matrix().into(),
             },
         }
     }

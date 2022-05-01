@@ -4,7 +4,7 @@
 
 struct CameraUniform {
     view_position: vec4<f32>;
-    view_proj: mat4x4<f32>;
+    world_to_clip: mat4x4<f32>;
 };
 [[group(0), binding(1)]]
 var<uniform> camera: CameraUniform;
@@ -32,7 +32,7 @@ struct CubeUniform {
 var<uniform> cube: CubeUniform;
 
 struct ShadowUniform {
-    proj: mat4x4<f32>;
+    world_to_clip: mat4x4<f32>;
 };
 [[group(2), binding(0)]]
 var<uniform> shadow: ShadowUniform;
@@ -87,21 +87,22 @@ fn vs_cube_face_main(
         instance.face_to_cube_3,
     );
 
-    let model_pos: vec4<f32> = vec4<f32>(model.position, 1.0);
-    let cube_pos: vec4<f32> = face_to_cube * model_pos;
+    let model_pos = vec4<f32>(model.position, 1.0);
+    let cube_pos = face_to_cube * model_pos;
     let world_pos = cube.cube_to_world * cube_pos;
-    let view_pos = camera.view_proj * world_pos;
+    let clip_pos = camera.world_to_clip * world_pos;
 
-    var normal: vec3<f32> = model.normal;
-    let face_to_cube_normal = extract3x3(face_to_cube);
-    let cube_to_world_normal = extract3x3(cube.cube_to_world);
-    normal = cube_to_world_normal * face_to_cube_normal * normal;
+    let face_normal = model.normal;
+    let cube_normal = extract3x3(face_to_cube) * face_normal;
+    let world_normal = extract3x3(cube.cube_to_world) * cube_normal;
+
+    let decal_coords = instance.decal_offset + model.decal_coords;
 
     var out: CubeFaceVertexOutput;
-    out.clip_position = view_pos;
+    out.clip_position = clip_pos;
     out.world_position = world_pos;
-    out.normal = normal;
-    out.decal_coords = instance.decal_offset + model.decal_coords;
+    out.normal = world_normal;
+    out.decal_coords = decal_coords;
     return out;
 }
 
@@ -118,11 +119,12 @@ fn vs_cube_face_shadow_main(
         instance.face_to_cube_3,
     );
 
-    let model_pos: vec4<f32> = vec4<f32>(model.position, 1.0);
-    let cube_pos: vec4<f32> = face_to_cube * model_pos;
+    let model_pos = vec4<f32>(model.position, 1.0);
+    let cube_pos = face_to_cube * model_pos;
     let world_pos = cube.cube_to_world * cube_pos;
-    let proj_pos = shadow.proj * world_pos;
-    return proj_pos;
+    let clip_pos = shadow.world_to_clip * world_pos;
+
+    return clip_pos;
 }
 
 
@@ -143,18 +145,17 @@ struct CubeEdgeVertexOutput {
 fn vs_cube_edge_main(
     model: CubeEdgeVertexInput,
 ) -> CubeEdgeVertexOutput {
-    var pos: vec4<f32> = vec4<f32>(model.position, 1.0);
-    let world_pos = cube.cube_to_world * pos;
-    pos = camera.view_proj * world_pos;
+    let cube_pos = vec4<f32>(model.position, 1.0);
+    let world_pos = cube.cube_to_world * cube_pos;
+    let clip_pos = camera.world_to_clip * world_pos;
 
-    var normal = model.normal;
-    let cube_to_world_normal = extract3x3(cube.cube_to_world);
-    normal = cube_to_world_normal * normal;
+    let cube_normal = model.normal;
+    let world_normal = extract3x3(cube.cube_to_world) * cube_normal;
 
     var out: CubeEdgeVertexOutput;
-    out.clip_position = pos;
+    out.clip_position = clip_pos;
     out.world_position = world_pos;
-    out.normal = normal;
+    out.normal = world_normal;
     return out;
 }
 
@@ -163,10 +164,10 @@ fn vs_cube_edge_main(
 fn vs_cube_edge_shadow_main(
     model: CubeEdgeVertexInput,
 ) -> [[builtin(position)]] vec4<f32> {
-    var pos: vec4<f32> = vec4<f32>(model.position, 1.0);
-    let world_pos = cube.cube_to_world * pos;
-    pos = shadow.proj * world_pos;
-    return pos;
+    let cube_pos = vec4<f32>(model.position, 1.0);
+    let world_pos = cube.cube_to_world * cube_pos;
+    let clip_pos = shadow.world_to_clip * world_pos;
+    return clip_pos;
 }
 
 // ----  Floor Vertex Shader  -- ---- ---- ---- ---- ---- ---- ---- ----
@@ -189,12 +190,12 @@ fn vs_floor_main(
     model: FloorVertexInput,
 ) -> FloorVertexOutput {
     let world_pos: vec4<f32> = vec4<f32>(model.position, 1.0);
-    let view_pos = camera.view_proj * world_pos;
+    let clip_pos = camera.world_to_clip * world_pos;
 
     var normal: vec3<f32> = model.normal;
 
     var out: FloorVertexOutput;
-    out.clip_position = view_pos;
+    out.clip_position = clip_pos;
     out.world_position = world_pos;
     out.normal = normal;
     out.decal_coords = model.decal_coords;
@@ -205,9 +206,9 @@ fn vs_floor_main(
 fn vs_floor_shadow_main(
     model: FloorVertexInput,
 ) -> [[builtin(position)]] vec4<f32> {
-    let world_pos: vec4<f32> = vec4<f32>(model.position, 1.0);
-    let view_pos = shadow.proj * world_pos;
-    return view_pos;
+    let world_pos = vec4<f32>(model.position, 1.0);
+    let clip_pos = shadow.world_to_clip * world_pos;
+    return clip_pos;
 }
 
 
