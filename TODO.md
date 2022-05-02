@@ -4,6 +4,7 @@
 
  * ~~Is the cube decal texture lifetime okay?~~
  * Cube spins too fast at program startup.
+ * Anisotropic shading is not aligned to anything.
 
 ## Cleanup and Organization
 

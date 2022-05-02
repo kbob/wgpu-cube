@@ -71,7 +71,7 @@ struct CubeFaceVertexInput {
 struct CubeFaceVertexOutput {
     [[builtin(position)]] clip_position: vec4<f32>;
     [[location(0), interpolate(perspective, sample)]] world_position: vec4<f32>;
-    [[location(1), interpolate(perspective, sample)]] normal: vec3<f32>;
+    [[location(1), interpolate(perspective, sample)]] world_normal: vec3<f32>;
     [[location(2), interpolate(perspective, sample)]] decal_coords: vec2<f32>;
 };
 
@@ -101,7 +101,7 @@ fn vs_cube_face_main(
     var out: CubeFaceVertexOutput;
     out.clip_position = clip_pos;
     out.world_position = world_pos;
-    out.normal = world_normal;
+    out.world_normal = world_normal;
     out.decal_coords = decal_coords;
     return out;
 }
@@ -138,7 +138,7 @@ struct CubeEdgeVertexInput {
 struct CubeEdgeVertexOutput {
     [[builtin(position)]] clip_position: vec4<f32>;
     [[location(0)]] world_position: vec4<f32>;
-    [[location(1)]] normal: vec3<f32>;
+    [[location(1)]] world_normal: vec3<f32>;
 };
 
 [[stage(vertex)]]
@@ -155,7 +155,7 @@ fn vs_cube_edge_main(
     var out: CubeEdgeVertexOutput;
     out.clip_position = clip_pos;
     out.world_position = world_pos;
-    out.normal = world_normal;
+    out.world_normal = world_normal;
     return out;
 }
 
@@ -181,7 +181,7 @@ struct FloorVertexInput {
 struct FloorVertexOutput {
     [[builtin(position)]] clip_position: vec4<f32>;
     [[location(0), interpolate(perspective, sample)]] world_position: vec4<f32>;
-    [[location(1), interpolate(perspective, sample)]] normal: vec3<f32>;
+    [[location(1), interpolate(perspective, sample)]] world_normal: vec3<f32>;
     [[location(2), interpolate(perspective, sample)]] decal_coords: vec2<f32>;
 };
 
@@ -192,12 +192,12 @@ fn vs_floor_main(
     let world_pos: vec4<f32> = vec4<f32>(model.position, 1.0);
     let clip_pos = camera.world_to_clip * world_pos;
 
-    var normal: vec3<f32> = model.normal;
+    let world_normal: vec3<f32> = model.normal;
 
     var out: FloorVertexOutput;
     out.clip_position = clip_pos;
     out.world_position = world_pos;
-    out.normal = normal;
+    out.world_normal = world_normal;
     out.decal_coords = model.decal_coords;
     return out;
 }
@@ -366,7 +366,6 @@ fn disney_brdf(
     let ax = max(0.001, sqr(material.roughness) / aspect);
     let ay = max(0.001, sqr(material.roughness) * aspect);
     let Ds = gtr2_aniso(NdotH, dot(H, X), dot(H, Y), ax, ay);
-    // let Ds = gtr2(NdotH, max(0.001, sqr(material.roughness))); // XXX
 
     let FH = schlick_fresnel(LdotH);
     let Fs = mix(Cspec0, vec3<f32>(1.0), FH);
@@ -385,20 +384,6 @@ fn disney_brdf(
         * (1.0 - material.metallic)
         + Gs * Fs * Ds
         + 0.25 * material.clearcoat * Gr * Fr * Dr;
-
-    // let a = 1.0 / PI;
-    // let b = mix(Fd, ss, material.subsurface) * Cdlin;
-    // let c = Fsheen;
-    // let d = 1.0 - material.metallic;
-    // let e = Gs * Fs * Ds;
-    // let f = .25 * material.clearcoat;
-    // let g = Gr  * Fr * Dr;
-    // // let a: f32 = 0.0;
-    // // let e: f32 = 0.0;
-    // // let f: f32 = 0.0;
-    // // if (true) { return vec3<f32>(Ds * 0.01); }
-    // // if (Ds > 1.0) { return vec3<f32>(0.0, 1.0, 0.0); }
-    // return ((a * b + c) * d) + e + (f * g);
 }
 
 
@@ -645,7 +630,7 @@ let led_base_color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
 let led_r2: f32 = 0.15;
 let led_bleed_r2: f32 = 0.20;
 
-fn face_color(
+fn face_color_brdf(
     tex_index: vec2<i32>,
     N: vec3<f32>,
     V: vec3<f32>,
@@ -661,6 +646,7 @@ fn face_color(
     material.specular = 0.15;
     material.roughness = 0.4;
     if (dot(decal_pixel, decal_pixel) != 1.0) {
+        // this fragment is in a decal.
         material.base_color = decal_pixel.rgb;
         material.metallic = 0.8;
         material.specular = 0.4;
@@ -670,7 +656,7 @@ fn face_color(
 
     var color = vec3<f32>(0.0);
 
-    // Ambient
+    // Ambient (cheating)
     color = color + lights.lights[0].color.rgb * material.base_color;
 
     for (var i = 1u; i < lights.count; i = i + 1u) {
@@ -684,40 +670,17 @@ fn face_color(
 
     }
     return vec4<f32>(color, 1.0);
-
-
-    // var material_color = cube_face_base_color.rgb;
-    // material_color = max(material_color, 1.0 * decal_pixel.rgb);
-    // let 
-
-    // var material: Material = material_defaults();
-    // // material.base_color = vec3<f32>(0.5);
-    // material.base_color = vec3<f32>(0.2);
-    // material.specular = 0.0;
-    // material.specular_tint = 1.0;
-    // material.roughness = 1.0;
-    // material.sheen = 0.0;
-    // var color = vec3<f32>(0.0);
-    // for (var i = 1u; i < lights.count; i = i + 1u) {
-    //     let light = lights.lights[i];
-    //     let L = normalize(light.direction.xyz);
-
-    //     let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
-    //     color = color + dot(N, L) * b;
-    // }
-    // return vec4<f32>(color, 1.0);
 }
 
-fn XXXface_color(
+fn face_color_classic(
     tex_index: vec2<i32>,
     N: vec3<f32>,
     V: vec3<f32>,
     world_pos: vec4<f32>,
 ) -> vec4<f32> {
-    var decal_pixel = vec4<f32>(textureLoad(t_decal, tex_index, 0));
-    decal_pixel = cube.decal_visibility * decal_pixel;
+    let decal_pixel = vec4<f32>(textureLoad(t_decal, tex_index, 0));
     var material_color = cube_face_base_color.rgb;
-    material_color = max(material_color, 1.0 * decal_pixel.rgb);
+    material_color = max(material_color, decal_pixel.rgb);
     var color = vec3<f32>(0.0);
 
     // Ambient
@@ -733,13 +696,14 @@ fn XXXface_color(
         // let shadow = fetch_shadow(i, light.proj * world_pos);
         let shadow = 1.0;
 
-        let diffuse = burley_diffuse(
-            cube_face_material_roughness,
-            N,
-            L,
-            V,
-            H,
-        );
+        let diffuse = lambert_diffuse(light.color.rgb, N, L);
+        // let diffuse = burley_diffuse(
+        //     cube_face_material_roughness,
+        //     N,
+        //     L,
+        //     V,
+        //     H,
+        // );
         let specular = blinn_phong_specular(
             light.color.rgb,
             N,
@@ -762,40 +726,18 @@ fn led_color(
 }
 
 [[stage(fragment)]]
-fn YYYfs_cube_face_main(in: CubeFaceVertexOutput) -> [[location(0)]] vec4<f32> {
-    let N = normalize(in.normal);
-    let X = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), N));
-    let Y = normalize(cross(N, X));
-    let V = normalize(camera.view_position.xyz - in.world_position.xyz);
-
-    var material: Material = material_defaults();
-    // material.base_color = vec3<f32>(0.5);
-    material.base_color = vec3<f32>(0.2);
-    material.specular = 0.0;
-    material.roughness = 1.0;
-    material.sheen = 0.0;
-    var color = vec3<f32>(0.0);
-    for (var i = 1u; i < lights.count; i = i + 1u) {
-        let light = lights.lights[i];
-        let L = normalize(light.direction.xyz);
-
-        let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
-        color = color + dot(L, N) * light.color.rgb * b;
-    }
-    return vec4<f32>(color, 1.0);
-}
-
-[[stage(fragment)]]
 fn fs_cube_face_main(in: CubeFaceVertexOutput) -> [[location(0)]] vec4<f32> {
     let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
     let pix_coord = t_coord * 64.0;
     let pix_center = floor(pix_coord) + 0.5;
     let tex_index = vec2<i32>(pix_center);
 
-    let normal = normalize(in.normal);
-    let view_dir = normalize(camera.view_position.xyz - in.world_position.xyz);
+    let world_pos = in.world_position;
+    let N = normalize(in.world_normal);
+    let V = normalize(camera.view_position.xyz - world_pos.xyz);
 
-    let face_color = face_color(tex_index, normal, view_dir, in.world_position);
+    let face_color = face_color_brdf(tex_index, N, V, world_pos);
+    // let face_color = face_color_classic(tex_index, N, V, world_pos);
     let led_color = led_color(tex_index);
 
     let pix_pos = pix_coord - pix_center;
@@ -815,9 +757,39 @@ fn fs_cube_face_main(in: CubeFaceVertexOutput) -> [[location(0)]] vec4<f32> {
 let cube_edge_material_color = vec4<f32>(0.05, 0.05, 0.05, 1.0);
 let cube_edge_material_roughness = 0.1;
 
-fn edge_color(
-    normal: vec3<f32>,
-    view_dir: vec3<f32>,
+fn edge_color_brdf(
+    N: vec3<f32>,
+    V: vec3<f32>,
+    world_pos: vec4<f32>,
+) -> vec4<f32> {
+    let X = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), N));
+    let Y = normalize(cross(N, X));
+
+    var material = material_defaults();
+    material.base_color = vec3<f32>(0.0);
+    material.roughness = 0.05;
+
+    var color = vec3<f32>(0.0);
+
+    // Ambient (cheating)
+    color = color + lights.lights[0].color.rgb * material.base_color;
+
+    for (var i = 1u; i < lights.count; i = i + 1u) {
+        let light = lights.lights[i];
+        let L = normalize(light.direction.xyz);
+
+        let shadow: f32 = 1.0;
+
+        let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
+        color = color + dot(L, N) * light.color.rgb * b;
+
+    }
+    return vec4<f32>(color, 1.0);
+}
+
+fn edge_color_classic(
+    N: vec3<f32>,
+    V: vec3<f32>,
     world_pos: vec4<f32>,
 ) -> vec4<f32> {
     var color = vec3<f32>(0.0);
@@ -829,35 +801,27 @@ fn edge_color(
     // Directional lights
     for (var i = 1u; i < lights.count; i = i + 1u) {
         let light = lights.lights[i];
-        let light_dir = normalize(light.direction.xyz);
-        let half_dir = normalize(view_dir + light_dir);
+        let L = normalize(light.direction.xyz);
+        let H = normalize(V + L);
 
         // shadow just adds shadow acne artifacts.  Skip it.
         // let shadow = fetch_shadow(i, light.proj * world_pos);
         let shadow = 1.0;
 
-        let diffuse = burley_diffuse(
-            cube_edge_material_roughness,
-            normal,
-            light_dir,
-            view_dir,
-            half_dir,
-        );
-        let specular = blinn_phong_specular(
-            light.color.rgb,
-            normal,
-            light_dir,
-            view_dir,
-            half_dir,
-        );
+        let diffuse = lambert_diffuse(light.color.rgb, N, L);
+        // let rough = cube_edge_material_roughness;
+        // let diffuse = burley_diffuse(rough, N, L, V, H);
+
+        let specular = blinn_phong_specular(light.color.rgb, N, L, V, H);
+
         color = color + shadow * material_color * (diffuse + specular);
     }
     return vec4<f32>(color, cube_edge_material_color.a);
 }
 
 [[stage(fragment)]]
-fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
-    let N = normalize(in.normal);
+fn YYYfs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
+    let N = normalize(in.world_normal);
     let X = normalize(cross(N, vec3<f32>(1.0, 0.0, 0.0))); // arbitrary
     let Y = normalize(cross(N, X));
     let V = normalize(camera.view_position.xyz - in.world_position.xyz);
@@ -880,12 +844,12 @@ fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
 }
 
 [[stage(fragment)]]
-fn XXXfs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
-    let normal = normalize(in.normal);
-    let view_dir = normalize(camera.view_position.xyz - in.world_position.xyz);
+fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
+    let N = normalize(in.world_normal);
+    let V = normalize(camera.view_position.xyz - in.world_position.xyz);
 
-    let color = edge_color(normal, view_dir, in.world_position);
-    return color;
+    return edge_color_brdf(N, V, in.world_position);
+    // return edge_color_classic(N, V, in.world_position);
 }
 
 
@@ -899,7 +863,7 @@ var s_floor_decal: sampler;
 // No base material color.  It comes from the decal texture.
 let floor_material_roughness: f32 = 0.6;
 
-fn floor_color(
+fn floor_color_brdf(
     tex_coord: vec2<f32>,
     N: vec3<f32>,
     V: vec3<f32>,
@@ -917,6 +881,33 @@ fn floor_color(
 
     var color = vec3<f32>(0.0);
 
+    // Ambient (cheating)
+    color = color + lights.lights[0].color.rgb * material_color;
+
+    // Directional lights
+    for (var i = 1u; i < lights.count; i = i + 1u) {
+        let light = lights.lights[i];
+        let L = normalize(light.direction.xyz);
+
+        let shadow = fetch_shadow16(i, light.proj * world_pos);
+
+        let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
+        color = color + shadow * dot(L, N) * light.color.rgb * b;
+    }
+    return vec4<f32>(color, 1.0);
+}
+
+fn floor_color_classic(
+    tex_coord: vec2<f32>,
+    N: vec3<f32>,
+    V: vec3<f32>,
+    world_pos: vec4<f32>,
+) -> vec4<f32> {
+    let material_color =
+        textureSample(t_floor_decal, s_floor_decal, tex_coord).rgb * 0.3;
+
+    var color = vec3<f32>(0.0);
+
     // Ambient
     color = color + lights.lights[0].color.rgb * material_color;
 
@@ -924,28 +915,16 @@ fn floor_color(
     for (var i = 1u; i < lights.count; i = i + 1u) {
         let light = lights.lights[i];
         let L = normalize(light.direction.xyz);
-        // let H = normalize(V + L);
+        let H = normalize(V + L);
 
         let shadow = fetch_shadow16(i, light.proj * world_pos);
 
-        let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
-        color = color + shadow * dot(L, N) * light.color.rgb * b;
+        let diffuse = lambert_diffuse(light.color.rgb, N, L);
+        // let diffuse = burley_diffuse(floor_material_roughness, N, L, V, H);
 
-        // let diffuse = burley_diffuse(
-        //     floor_material_roughness,
-        //     N,
-        //     L,
-        //     V,
-        //     H,
-        // );
-        // let specular = blinn_phong_specular(
-        //     light.color.rgb,
-        //     N,
-        //     L,
-        //     V,
-        //     H,
-        // );
-        // color = color + material_color * shadow * (diffuse + specular);
+        let specular = blinn_phong_specular(light.color.rgb, N, L, V, N);
+
+        color = color + material_color * shadow * (diffuse + specular);
     }
     return vec4<f32>(color, 1.0);
 }
@@ -954,8 +933,9 @@ fn floor_color(
 fn fs_floor_main(in: FloorVertexOutput) -> [[location(0)]] vec4<f32> {
     let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
 
-    let normal = normalize(in.normal);
-    let view_dir = normalize(camera.view_position.xyz - in.world_position.xyz);
+    let N = normalize(in.world_normal);
+    let V = normalize(camera.view_position.xyz - in.world_position.xyz);
 
-    return floor_color(t_coord, normal, view_dir, in.world_position);
+    return floor_color_brdf(t_coord, N, V, in.world_position);
+    // return floor_color_classic(t_coord, N, V, in.world_position);
 }
