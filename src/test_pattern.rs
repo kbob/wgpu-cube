@@ -26,12 +26,12 @@ impl TestPattern {
         // self.write_row_column(self.frame_number, 0u8);
         self.write_row_column(self.frame_number + SIDE - 7, 0u8);
         self.write_row_column(self.frame_number + SIDE - 6, 255u8);
-        self.write_row_column(self.frame_number + SIDE - 5, 127u8);
-        self.write_row_column(self.frame_number + SIDE - 4, 63u8);
-        self.write_row_column(self.frame_number + SIDE - 3, 31u8);
-        self.write_row_column(self.frame_number + SIDE - 2, 31u8);
-        self.write_row_column(self.frame_number + SIDE - 1, 63u8);
-        self.write_row_column(self.frame_number + SIDE - 0, 127u8);
+        self.write_row_column(self.frame_number + SIDE - 5, 63u8);
+        self.write_row_column(self.frame_number + SIDE - 4, 15u8);
+        self.write_row_column(self.frame_number + SIDE - 3, 3u8);
+        self.write_row_column(self.frame_number + SIDE - 2, 3u8);
+        self.write_row_column(self.frame_number + SIDE - 1, 15u8);
+        self.write_row_column(self.frame_number + SIDE - 0, 63u8);
 
         if self.frame_number == usize::MAX / 2 {
             self.frame_number = 0;

@@ -40,6 +40,7 @@ var<uniform> shadow: ShadowUniform;
 let TAU: f32 = 6.283185307179586;
 let PI: f32 = 3.141592653589793;
 
+let USE_BRDF_FLAG: bool = true;
 
 // ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ====
 // ====  Vertex Shaders
@@ -736,8 +737,12 @@ fn fs_cube_face_main(in: CubeFaceVertexOutput) -> [[location(0)]] vec4<f32> {
     let N = normalize(in.world_normal);
     let V = normalize(camera.view_position.xyz - world_pos.xyz);
 
-    let face_color = face_color_brdf(tex_index, N, V, world_pos);
-    // let face_color = face_color_classic(tex_index, N, V, world_pos);
+    var face_color: vec4<f32> = vec4<f32>(0.0);
+    if (USE_BRDF_FLAG) {
+        face_color = face_color_brdf(tex_index, N, V, world_pos);
+    } else {
+        face_color = face_color_classic(tex_index, N, V, world_pos);
+    }
     let led_color = led_color(tex_index);
 
     let pix_pos = pix_coord - pix_center;
@@ -848,8 +853,11 @@ fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
     let N = normalize(in.world_normal);
     let V = normalize(camera.view_position.xyz - in.world_position.xyz);
 
-    return edge_color_brdf(N, V, in.world_position);
-    // return edge_color_classic(N, V, in.world_position);
+    if (USE_BRDF_FLAG) {
+        return edge_color_brdf(N, V, in.world_position);
+    } else {
+        return edge_color_classic(N, V, in.world_position);
+    }
 }
 
 
@@ -936,6 +944,9 @@ fn fs_floor_main(in: FloorVertexOutput) -> [[location(0)]] vec4<f32> {
     let N = normalize(in.world_normal);
     let V = normalize(camera.view_position.xyz - in.world_position.xyz);
 
-    return floor_color_brdf(t_coord, N, V, in.world_position);
-    // return floor_color_classic(t_coord, N, V, in.world_position);
+    if (USE_BRDF_FLAG) {
+        return floor_color_brdf(t_coord, N, V, in.world_position);
+    } else {
+        return floor_color_classic(t_coord, N, V, in.world_position);
+    }
 }
