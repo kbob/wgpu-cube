@@ -164,24 +164,28 @@ fn create_shadow_render_pipeline(
 fn create_multisampled_framebuffer(
     device: &wgpu::Device,
     config: &wgpu::SurfaceConfiguration,
-) -> wgpu::TextureView {
-    let multisampled_texture_extent = wgpu::Extent3d {
-        width: config.width,
-        height: config.height,
-        depth_or_array_layers: 1,
-    };
-
-    device
-        .create_texture(&wgpu::TextureDescriptor {
-            label: Some("multisampleed_frame_texture"),
-            size: multisampled_texture_extent,
-            mip_level_count: 1,
-            sample_count: SAMPLE_COUNT,
-            dimension: wgpu::TextureDimension::D2,
-            format: config.format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        })
-        .create_view(&wgpu::TextureViewDescriptor::default())
+) -> Option<wgpu::TextureView> {
+    match SAMPLE_COUNT {
+        1 => None,
+        _ => Some({
+            let multisampled_texture_extent = wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            };
+            device
+                .create_texture(&wgpu::TextureDescriptor {
+                    label: Some("multisampleed_frame_texture"),
+                    size: multisampled_texture_extent,
+                    mip_level_count: 1,
+                    sample_count: SAMPLE_COUNT,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: config.format,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                })
+                .create_view(&wgpu::TextureViewDescriptor::default())
+        }),
+    }
 }
 
 #[rustfmt::skip]
@@ -192,7 +196,7 @@ struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     depth_texture: texture::Texture,
-    multisampled_framebuffer: wgpu::TextureView,
+    multisampled_framebuffer: Option<wgpu::TextureView>,
     camera: camera::Camera,             // Buffalo buffalo Buffalo...
     lights: lights::Lights,             // ... buffalo buffalo buffalo...
     blinky: blinky::Blinky,             // ... Buffalo buffalo.
@@ -659,12 +663,24 @@ impl State {
             // Inner scope ensures prepared data created above outlives
             // the render pass.
 
+            let view_f: &wgpu::TextureView;
+            let resolve_target_f: Option<&wgpu::TextureView>;
+            match &self.multisampled_framebuffer {
+                Some(msfb) => {
+                    view_f = &msfb;
+                    resolve_target_f = Some(&view);
+                }
+                None => {
+                    view_f = &view;
+                    resolve_target_f = None;
+                }
+            }
             let mut render_pass =
                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("render_pass"),
                     color_attachments: &[wgpu::RenderPassColorAttachment {
-                        view: &self.multisampled_framebuffer,
-                        resolve_target: Some(&view),
+                        view: view_f,
+                        resolve_target: resolve_target_f,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(BACKGROUND_COLOR),
                             store: true,
