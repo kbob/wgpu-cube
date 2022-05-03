@@ -216,7 +216,9 @@ impl Lights {
                 let end = offset + raw_size;
                 *bytemuck::from_bytes_mut::<ShadowUniformRaw>(
                     &mut data[offset..end],
-                ) = ShadowUniformRaw { world_to_clip: proj.into() };
+                ) = ShadowUniformRaw {
+                    world_to_clip: proj.into(),
+                };
             }
 
             let buffer = device.create_buffer(&wgpu::BufferDescriptor {
