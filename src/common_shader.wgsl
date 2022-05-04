@@ -742,21 +742,15 @@ fn fs_cube_face_main(in: CubeFaceVertexOutput) -> CubeFaceFragmentOutput {
     let N = normalize(in.world_normal);
     let V = normalize(camera.view_position.xyz - world_pos.xyz);
 
-    var face_color: vec4<f32> = vec4<f32>(0.0);
-    if (USE_BRDF_FLAG) {
-        face_color = face_color_brdf(tex_index, N, V, world_pos);
-    } else {
-        face_color = face_color_classic(tex_index, N, V, world_pos);
-    }
-    let led_color = led_color(tex_index);
-
     let pix_pos = pix_coord - pix_center;
     let pix_r2: f32 = pix_pos.x * pix_pos.x + pix_pos.y * pix_pos.y;
-    var color: vec4<f32>;
+    var color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
     if (pix_r2 < led_r2) {
-        color = led_color;
+        color = led_color(tex_index);
+    } else if (USE_BRDF_FLAG) {
+        color = face_color_brdf(tex_index, N, V, world_pos);
     } else {
-        color = face_color;
+        color = face_color_classic(tex_index, N, V, world_pos);
     }
     let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
     var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
