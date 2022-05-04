@@ -629,7 +629,7 @@ let cube_face_base_color: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
 // let led_base_color: vec4<f32> = vec4<f32>(0.06, 0.06, 0.06, 1.0);
 let led_base_color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
 let led_r2: f32 = 0.15;
-let led_bleed_r2: f32 = 0.20;
+let led_brightness: f32 = 4.0;
 
 fn face_color_brdf(
     tex_index: vec2<i32>,
@@ -722,12 +722,17 @@ fn led_color(
     tex_index: vec2<i32>,
 ) -> vec4<f32> {
     let blinky_color = vec4<f32>(textureLoad(t_blinky, tex_index, 0)) / 255.0;
-    let led_color = max(led_base_color, blinky_color);
+    let led_color = max(led_base_color, led_brightness * blinky_color);
     return led_color;
 }
 
+struct CubeFaceFragmentOutput {
+    [[location(0)]] color: vec4<f32>;
+    [[location(1)]] bright_color: vec4<f32>;
+};
+
 [[stage(fragment)]]
-fn fs_cube_face_main(in: CubeFaceVertexOutput) -> [[location(0)]] vec4<f32> {
+fn fs_cube_face_main(in: CubeFaceVertexOutput) -> CubeFaceFragmentOutput {
     let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
     let pix_coord = t_coord * 64.0;
     let pix_center = floor(pix_coord) + 0.5;
@@ -747,11 +752,21 @@ fn fs_cube_face_main(in: CubeFaceVertexOutput) -> [[location(0)]] vec4<f32> {
 
     let pix_pos = pix_coord - pix_center;
     let pix_r2: f32 = pix_pos.x * pix_pos.x + pix_pos.y * pix_pos.y;
+    var color: vec4<f32>;
     if (pix_r2 < led_r2) {
-        return led_color;
+        color = led_color;
     } else {
-        return face_color;
+        color = face_color;
     }
+    let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+    var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    if (brightness > 1.0) {
+        bright_color = vec4<f32>(color.rgb, 1.0);
+    }
+    var out: CubeFaceFragmentOutput;
+    out.color = color;
+    out.bright_color = bright_color;
+    return out;
 }
 
 
@@ -824,40 +839,55 @@ fn edge_color_classic(
     return vec4<f32>(color, cube_edge_material_color.a);
 }
 
+// [[stage(fragment)]]
+// fn YYYfs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
+//     let N = normalize(in.world_normal);
+//     let X = normalize(cross(N, vec3<f32>(1.0, 0.0, 0.0))); // arbitrary
+//     let Y = normalize(cross(N, X));
+//     let V = normalize(camera.view_position.xyz - in.world_position.xyz);
+
+//     var material: Material = material_defaults();
+//     material.base_color = vec3<f32>(0.0);
+//     material.roughness = 0.05;
+//     // material.clearcoat = 0.1;
+//     var color = vec3<f32>(0.01);
+//     for (var i = 1u; i < lights.count; i = i + 1u) {
+//         let light = lights.lights[i];
+//         let L = normalize(light.direction.xyz);
+
+//         let shadow: f32 = 1.0;
+
+//         let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
+//         color = color + shadow * dot(L, N) * light.color.rgb * b;
+//     }
+//     return vec4<f32>(color, 1.0);
+// }
+
+struct CubeEdgeFragmentOutput {
+    [[location(0)]] color: vec4<f32>;
+    [[location(1)]] bright_color: vec4<f32>;
+};
+
 [[stage(fragment)]]
-fn YYYfs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
+fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> CubeEdgeFragmentOutput {
     let N = normalize(in.world_normal);
-    let X = normalize(cross(N, vec3<f32>(1.0, 0.0, 0.0))); // arbitrary
-    let Y = normalize(cross(N, X));
     let V = normalize(camera.view_position.xyz - in.world_position.xyz);
 
-    var material: Material = material_defaults();
-    material.base_color = vec3<f32>(0.0);
-    material.roughness = 0.05;
-    // material.clearcoat = 0.1;
-    var color = vec3<f32>(0.01);
-    for (var i = 1u; i < lights.count; i = i + 1u) {
-        let light = lights.lights[i];
-        let L = normalize(light.direction.xyz);
-
-        let shadow: f32 = 1.0;
-
-        let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
-        color = color + shadow * dot(L, N) * light.color.rgb * b;
-    }
-    return vec4<f32>(color, 1.0);
-}
-
-[[stage(fragment)]]
-fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
-    let N = normalize(in.world_normal);
-    let V = normalize(camera.view_position.xyz - in.world_position.xyz);
-
+    var color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
     if (USE_BRDF_FLAG) {
-        return edge_color_brdf(N, V, in.world_position);
+        color = edge_color_brdf(N, V, in.world_position);
     } else {
-        return edge_color_classic(N, V, in.world_position);
+        color = edge_color_classic(N, V, in.world_position);
     }
+    let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+    var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    if (brightness > 1.0) {
+        bright_color = vec4<f32>(color.rgb, 1.0);
+    }
+    var out: CubeFaceFragmentOutput;
+    out.color = color;
+    out.bright_color = bright_color;
+    return out;
 }
 
 
@@ -937,16 +967,31 @@ fn floor_color_classic(
     return vec4<f32>(color, 1.0);
 }
 
+struct FloorFragmentOutput {
+    [[location(0)]] color: vec4<f32>;
+    [[location(1)]] bright_color: vec4<f32>;
+};
+
 [[stage(fragment)]]
-fn fs_floor_main(in: FloorVertexOutput) -> [[location(0)]] vec4<f32> {
+fn fs_floor_main(in: FloorVertexOutput) -> FloorFragmentOutput {
     let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
 
     let N = normalize(in.world_normal);
     let V = normalize(camera.view_position.xyz - in.world_position.xyz);
 
+    var color: vec4<f32> = vec4<f32>(0.0);
     if (USE_BRDF_FLAG) {
-        return floor_color_brdf(t_coord, N, V, in.world_position);
+        color = floor_color_brdf(t_coord, N, V, in.world_position);
     } else {
-        return floor_color_classic(t_coord, N, V, in.world_position);
+        color = floor_color_classic(t_coord, N, V, in.world_position);
     }
+    let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+    var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    if (brightness > 1.0) {
+        bright_color = vec4<f32>(color.rgb, 1.0);
+    }
+    var out: FloorFragmentOutput;
+    out.color = color;
+    out.bright_color = bright_color;
+    return out;
 }

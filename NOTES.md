@@ -292,6 +292,10 @@ Explains Disney Animation's PBR material model in 2012.<br>
 
 *Learn OpenGL*<br>
 
+### **[Efficient Gaussian Blur with Linear Sampling](https://www.rastergrid.com/blog/2010/09/efficient-Gaussian-blur-with-linear-sampling/)**
+
+*Daniel Rákos, rastergrid*<br>
+
 ## Shaders
 
 ### **[The Book of Shaders](https://thebookofshaders.com)**

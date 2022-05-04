@@ -25,6 +25,8 @@ const BACKFACE_CULL: bool = true;
 const ALPHA_BLENDING: bool = false;
 const SAMPLE_COUNT: u32 = 4;
 const PRINT_FPS: bool = true;
+const BRIGHT_COLOR_PIXEL_FORMAT: wgpu::TextureFormat =
+    wgpu::TextureFormat::Rgba32Float;
 
 #[derive(PartialEq)]
 pub enum Hand {
@@ -95,14 +97,21 @@ fn create_forward_render_pipeline(
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: fragment_entry,
-            targets: &[wgpu::ColorTargetState {
-                format: color_format,
-                blend: Some(match ALPHA_BLENDING {
-                    true => wgpu::BlendState::ALPHA_BLENDING,
-                    false => wgpu::BlendState::REPLACE,
-                }),
-                write_mask: wgpu::ColorWrites::ALL,
-            }],
+            targets: &[
+                wgpu::ColorTargetState {
+                    format: color_format,
+                    blend: Some(match ALPHA_BLENDING {
+                        true => wgpu::BlendState::ALPHA_BLENDING,
+                        false => wgpu::BlendState::REPLACE,
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                },
+                wgpu::ColorTargetState {
+                    format: BRIGHT_COLOR_PIXEL_FORMAT,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                },
+            ],
         }),
         multiview: None,
     })
@@ -163,28 +172,33 @@ fn create_shadow_render_pipeline(
 
 fn create_multisampled_framebuffer(
     device: &wgpu::Device,
-    config: &wgpu::SurfaceConfiguration,
+    width: u32,
+    height: u32,
+    format: wgpu::TextureFormat,
+    label: &str,
 ) -> Option<wgpu::TextureView> {
     match SAMPLE_COUNT {
         1 => None,
-        _ => Some({
+        _ => {
             let multisampled_texture_extent = wgpu::Extent3d {
-                width: config.width,
-                height: config.height,
+                width: width,
+                height: height,
                 depth_or_array_layers: 1,
             };
-            device
-                .create_texture(&wgpu::TextureDescriptor {
-                    label: Some("multisampleed_frame_texture"),
-                    size: multisampled_texture_extent,
-                    mip_level_count: 1,
-                    sample_count: SAMPLE_COUNT,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: config.format,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                })
-                .create_view(&wgpu::TextureViewDescriptor::default())
-        }),
+            Some(
+                device
+                    .create_texture(&wgpu::TextureDescriptor {
+                        label: Some(label),
+                        size: multisampled_texture_extent,
+                        mip_level_count: 1,
+                        sample_count: SAMPLE_COUNT,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: format,
+                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    })
+                    .create_view(&wgpu::TextureViewDescriptor::default()),
+            )
+        }
     }
 }
 
@@ -197,6 +211,8 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     depth_texture: texture::Texture,
     multisampled_framebuffer: Option<wgpu::TextureView>,
+    multisampled_bright_color: Option<wgpu::TextureView>,
+    bright_color: wgpu::TextureView,
     camera: camera::Camera,             // Buffalo buffalo Buffalo...
     lights: lights::Lights,             // ... buffalo buffalo buffalo...
     blinky: blinky::Blinky,             // ... Buffalo buffalo.
@@ -302,8 +318,40 @@ impl State {
 
         // Multisampled Framebuffer
 
-        let multisampled_framebuffer =
-            create_multisampled_framebuffer(&device, &config);
+        let multisampled_framebuffer = create_multisampled_framebuffer(
+            &device,
+            config.width,
+            config.height,
+            config.format,
+            "multisampled_frambeuffer",
+        );
+
+        // Bright color texture
+
+        let bright_color = device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("bright_color"),
+                size: wgpu::Extent3d {
+                    width: config.width,
+                    height: config.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: BRIGHT_COLOR_PIXEL_FORMAT,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let multisampled_bright_color = create_multisampled_framebuffer(
+            &device,
+            config.width,
+            config.height,
+            BRIGHT_COLOR_PIXEL_FORMAT,
+            "multisampled_bright_color",
+        );
 
         let static_bindings = binding::StaticBindings::new(&device);
         let frame_bindings = binding::FrameBindings::new(&device);
@@ -493,6 +541,8 @@ impl State {
             config,
             depth_texture,
             multisampled_framebuffer,
+            bright_color,
+            multisampled_bright_color,
             camera,
             lights,
             blinky,
@@ -531,8 +581,37 @@ impl State {
                 },
                 SAMPLE_COUNT,
             );
-            self.multisampled_framebuffer =
-                create_multisampled_framebuffer(&self.device, &self.config);
+            self.multisampled_framebuffer = create_multisampled_framebuffer(
+                &self.device,
+                self.config.width,
+                self.config.height,
+                self.config.format,
+                "multisampled_framebuffer (resize)",
+            );
+            self.bright_color = self
+                .device
+                .create_texture(&wgpu::TextureDescriptor {
+                    label: Some("bright_color"),
+                    size: wgpu::Extent3d {
+                        width: self.config.width,
+                        height: self.config.height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: BRIGHT_COLOR_PIXEL_FORMAT,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING
+                        | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                })
+                .create_view(&wgpu::TextureViewDescriptor::default());
+            self.multisampled_bright_color = create_multisampled_framebuffer(
+                &self.device,
+                self.config.width,
+                self.config.height,
+                BRIGHT_COLOR_PIXEL_FORMAT,
+                "multisampled_bright_color (resize)",
+            );
             self.cube_trackball.set_viewport_size(&new_size);
         }
     }
@@ -663,29 +742,55 @@ impl State {
             // Inner scope ensures prepared data created above outlives
             // the render pass.
 
-            let view_f: &wgpu::TextureView;
-            let resolve_target_f: Option<&wgpu::TextureView>;
+            let color_view: &wgpu::TextureView;
+            let color_resolve_target: Option<&wgpu::TextureView>;
             match &self.multisampled_framebuffer {
                 Some(msfb) => {
-                    view_f = &msfb;
-                    resolve_target_f = Some(&view);
+                    color_view = &msfb;
+                    color_resolve_target = Some(&view);
                 }
                 None => {
-                    view_f = &view;
-                    resolve_target_f = None;
+                    color_view = &view;
+                    color_resolve_target = None;
                 }
             }
+
+            let bright_view: &wgpu::TextureView;
+            let bright_resolve_target: Option<&wgpu::TextureView>;
+            match &self.multisampled_bright_color {
+                Some(msfb) => {
+                    bright_view = &msfb;
+                    bright_resolve_target = Some(&self.bright_color);
+                }
+                None => {
+                    bright_view = &self.bright_color;
+                    bright_resolve_target = None;
+                }
+            }
+
+            let color_attachments = vec![
+                wgpu::RenderPassColorAttachment {
+                    view: color_view,
+                    resolve_target: color_resolve_target,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(BACKGROUND_COLOR),
+                        store: true,
+                    },
+                },
+                wgpu::RenderPassColorAttachment {
+                    view: bright_view,
+                    resolve_target: bright_resolve_target,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::default()),
+                        store: true,
+                    },
+                },
+            ];
+
             let mut render_pass =
                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("render_pass"),
-                    color_attachments: &[wgpu::RenderPassColorAttachment {
-                        view: view_f,
-                        resolve_target: resolve_target_f,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(BACKGROUND_COLOR),
-                            store: true,
-                        },
-                    }],
+                    color_attachments: color_attachments.as_slice(),
                     depth_stencil_attachment: Some(
                         wgpu::RenderPassDepthStencilAttachment {
                             view: &self.depth_texture.view,
