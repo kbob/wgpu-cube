@@ -12,6 +12,7 @@ mod cube;
 mod cube_model;
 mod floor;
 mod lights;
+mod post;
 mod prelude;
 mod test_pattern;
 mod texture;
@@ -25,8 +26,10 @@ const BACKFACE_CULL: bool = true;
 const ALPHA_BLENDING: bool = false;
 const SAMPLE_COUNT: u32 = 4;
 const PRINT_FPS: bool = true;
-const BRIGHT_COLOR_PIXEL_FORMAT: wgpu::TextureFormat =
-    wgpu::TextureFormat::Rgba32Float;
+pub const BRIGHT_COLOR_PIXEL_FORMAT: wgpu::TextureFormat =
+    wgpu::TextureFormat::Rgba16Float;
+    // wgpu::TextureFormat::Rgba32Float;
+    // wgpu::TextureFormat::Rgba8Unorm;
 
 #[derive(PartialEq)]
 pub enum Hand {
@@ -75,8 +78,8 @@ fn create_forward_render_pipeline(
                 true => Some(wgpu::Face::Back),
                 false => None,
             },
-            polygon_mode: wgpu::PolygonMode::Fill,
             unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
         depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
@@ -140,8 +143,8 @@ fn create_shadow_render_pipeline(
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: Some(wgpu::Face::Back),
-            polygon_mode: wgpu::PolygonMode::Fill,
             unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
         depth_stencil: Some(wgpu::DepthStencilState {
@@ -212,7 +215,7 @@ struct State {
     depth_texture: texture::Texture,
     multisampled_framebuffer: Option<wgpu::TextureView>,
     multisampled_bright_color: Option<wgpu::TextureView>,
-    bright_color: wgpu::TextureView,
+    // bright_color: wgpu::TextureView,
     camera: camera::Camera,             // Buffalo buffalo Buffalo...
     lights: lights::Lights,             // ... buffalo buffalo buffalo...
     blinky: blinky::Blinky,             // ... Buffalo buffalo.
@@ -229,6 +232,7 @@ struct State {
     frame_bind_group: wgpu::BindGroup,
     shadow_pass_bind_group: wgpu::BindGroup,
     forward_pass_bind_group: wgpu::BindGroup,
+    post: post::Post,                   // (lost buffalo)
     frame_count: u32,
 }
 
@@ -328,22 +332,22 @@ impl State {
 
         // Bright color texture
 
-        let bright_color = device
-            .create_texture(&wgpu::TextureDescriptor {
-                label: Some("bright_color"),
-                size: wgpu::Extent3d {
-                    width: config.width,
-                    height: config.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: BRIGHT_COLOR_PIXEL_FORMAT,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING
-                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            })
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        // let bright_color = device
+        //     .create_texture(&wgpu::TextureDescriptor {
+        //         label: Some("bright_color"),
+        //         size: wgpu::Extent3d {
+        //             width: config.width,
+        //             height: config.height,
+        //             depth_or_array_layers: 1,
+        //         },
+        //         mip_level_count: 1,
+        //         sample_count: 1,
+        //         dimension: wgpu::TextureDimension::D2,
+        //         format: BRIGHT_COLOR_PIXEL_FORMAT,
+        //         usage: wgpu::TextureUsages::TEXTURE_BINDING
+        //             | wgpu::TextureUsages::RENDER_ATTACHMENT,
+        //     })
+        //     .create_view(&wgpu::TextureViewDescriptor::default());
 
         let multisampled_bright_color = create_multisampled_framebuffer(
             &device,
@@ -529,6 +533,17 @@ impl State {
             )
         };
 
+        // Postprocessing passes
+
+        let post = post::Post::new(
+            &device,
+            config.width,
+            config.height,
+            config.format,
+            &static_bindings.layout,
+            &frame_bindings.layout,
+        );
+
         let frame_count = 0;
 
         // Results
@@ -541,7 +556,7 @@ impl State {
             config,
             depth_texture,
             multisampled_framebuffer,
-            bright_color,
+            // bright_color,
             multisampled_bright_color,
             camera,
             lights,
@@ -559,6 +574,7 @@ impl State {
             frame_bind_group,
             forward_pass_bind_group,
             shadow_pass_bind_group,
+            post,
             frame_count,
         }
     }
@@ -588,23 +604,23 @@ impl State {
                 self.config.format,
                 "multisampled_framebuffer (resize)",
             );
-            self.bright_color = self
-                .device
-                .create_texture(&wgpu::TextureDescriptor {
-                    label: Some("bright_color"),
-                    size: wgpu::Extent3d {
-                        width: self.config.width,
-                        height: self.config.height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: BRIGHT_COLOR_PIXEL_FORMAT,
-                    usage: wgpu::TextureUsages::TEXTURE_BINDING
-                        | wgpu::TextureUsages::RENDER_ATTACHMENT,
-                })
-                .create_view(&wgpu::TextureViewDescriptor::default());
+            // self.bright_color = self
+            //     .device
+            //     .create_texture(&wgpu::TextureDescriptor {
+            //         label: Some("bright_color"),
+            //         size: wgpu::Extent3d {
+            //             width: self.config.width,
+            //             height: self.config.height,
+            //             depth_or_array_layers: 1,
+            //         },
+            //         mip_level_count: 1,
+            //         sample_count: 1,
+            //         dimension: wgpu::TextureDimension::D2,
+            //         format: BRIGHT_COLOR_PIXEL_FORMAT,
+            //         usage: wgpu::TextureUsages::TEXTURE_BINDING
+            //             | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            //     })
+            //     .create_view(&wgpu::TextureViewDescriptor::default());
             self.multisampled_bright_color = create_multisampled_framebuffer(
                 &self.device,
                 self.config.width,
@@ -747,10 +763,12 @@ impl State {
             match &self.multisampled_framebuffer {
                 Some(msfb) => {
                     color_view = &msfb;
-                    color_resolve_target = Some(&view);
+                    // color_resolve_target = Some(&view);
+                    color_resolve_target = Some(self.post.input_framebuffer());
                 }
                 None => {
-                    color_view = &view;
+                    // color_view = &view;
+                    color_view = self.post.input_framebuffer();
                     color_resolve_target = None;
                 }
             }
@@ -760,10 +778,10 @@ impl State {
             match &self.multisampled_bright_color {
                 Some(msfb) => {
                     bright_view = &msfb;
-                    bright_resolve_target = Some(&self.bright_color);
+                    bright_resolve_target = Some(&self.post.bright_color);
                 }
                 None => {
-                    bright_view = &self.bright_color;
+                    bright_view = &self.post.bright_color;
                     bright_resolve_target = None;
                 }
             }
@@ -789,7 +807,7 @@ impl State {
 
             let mut render_pass =
                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("render_pass"),
+                    label: Some("forward_render_pass"),
                     color_attachments: color_attachments.as_slice(),
                     depth_stencil_attachment: Some(
                         wgpu::RenderPassDepthStencilAttachment {
@@ -865,6 +883,9 @@ impl State {
                 );
             }
         }
+
+        // Post Processing
+        self.post.render(&self.device, &self.queue, &mut encoder, &view);
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();

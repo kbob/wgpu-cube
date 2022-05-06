@@ -705,6 +705,7 @@ fn face_color_classic(
         //     V,
         //     H,
         // );
+
         let specular = blinn_phong_specular(
             light.color.rgb,
             N,
@@ -832,30 +833,6 @@ fn edge_color_classic(
     }
     return vec4<f32>(color, cube_edge_material_color.a);
 }
-
-// [[stage(fragment)]]
-// fn YYYfs_cube_edge_main(in: CubeEdgeVertexOutput) -> [[location(0)]] vec4<f32> {
-//     let N = normalize(in.world_normal);
-//     let X = normalize(cross(N, vec3<f32>(1.0, 0.0, 0.0))); // arbitrary
-//     let Y = normalize(cross(N, X));
-//     let V = normalize(camera.view_position.xyz - in.world_position.xyz);
-
-//     var material: Material = material_defaults();
-//     material.base_color = vec3<f32>(0.0);
-//     material.roughness = 0.05;
-//     // material.clearcoat = 0.1;
-//     var color = vec3<f32>(0.01);
-//     for (var i = 1u; i < lights.count; i = i + 1u) {
-//         let light = lights.lights[i];
-//         let L = normalize(light.direction.xyz);
-
-//         let shadow: f32 = 1.0;
-
-//         let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
-//         color = color + shadow * dot(L, N) * light.color.rgb * b;
-//     }
-//     return vec4<f32>(color, 1.0);
-// }
 
 struct CubeEdgeFragmentOutput {
     [[location(0)]] color: vec4<f32>;
