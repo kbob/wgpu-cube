@@ -28,8 +28,6 @@ const SAMPLE_COUNT: u32 = 4;
 const PRINT_FPS: bool = true;
 pub const BRIGHT_COLOR_PIXEL_FORMAT: wgpu::TextureFormat =
     wgpu::TextureFormat::Rgba16Float;
-    // wgpu::TextureFormat::Rgba32Float;
-    // wgpu::TextureFormat::Rgba8Unorm;
 
 #[derive(PartialEq)]
 pub enum Hand {
@@ -885,7 +883,8 @@ impl State {
         }
 
         // Post Processing
-        self.post.render(&self.device, &self.queue, &mut encoder, &view);
+        self.post
+            .render(&self.device, &self.queue, &mut encoder, &view);
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
