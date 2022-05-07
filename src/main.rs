@@ -883,8 +883,13 @@ impl State {
         }
 
         // Post Processing
-        self.post
-            .render(&self.device, &self.queue, &mut encoder, &view);
+        self.post.render(
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            &view,
+            &[&self.static_bind_group, &self.frame_bind_group],
+        );
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();

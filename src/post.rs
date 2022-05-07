@@ -190,11 +190,6 @@ fn create_pipeline(
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 },
-                // wgpu::ColorTargetState {
-                //     format: wgpu::TextureFormat::Rgba32Float,
-                //     blend: None,
-                //     write_mask: wgpu::ColorWrites::ALL,
-                // },
             ],
         }),
         multiview: None,
@@ -288,8 +283,8 @@ impl Post {
             "horizontal_blur",
             device,
             &[
-                // static_binding_layout,
-                // frame_binding_layout,
+                static_binding_layout,
+                frame_binding_layout,
                 &blur_pass_bindings.layout,
             ],
             &shader_module,
@@ -300,8 +295,8 @@ impl Post {
             "vertical_blur",
             device,
             &[
-                // static_binding_layout,
-                // frame_binding_layout,
+                static_binding_layout,
+                frame_binding_layout,
                 &blur_pass_bindings.layout,
             ],
             &shader_module,
@@ -312,8 +307,8 @@ impl Post {
             "composite",
             device,
             &[
-                // static_binding_layout,
-                // frame_binding_layout,
+                static_binding_layout,
+                frame_binding_layout,
                 &composite_pass_bindings.layout,
             ],
             &shader_module,
@@ -374,22 +369,25 @@ impl Post {
         _queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         image_out: &wgpu::TextureView,
+        other_bind_groups: &[&wgpu::BindGroup],
     ) {
         // First blur pass, we read from ldr_color.
         // Subsequent blur passes, we read from pong.
         let mut hblur_pass = &self.hblur0_pass;
-        for i in 0..BLUR_STEPS {
+        for _ in 0..BLUR_STEPS {
             self.render_post_pass(
                 encoder,
                 &self.hblur_pipeline,
                 hblur_pass,
                 &self.pong,
+                other_bind_groups,
             );
             self.render_post_pass(
                 encoder,
                 &self.vblur_pipeline,
                 &self.vblur_pass,
                 &self.ping,
+                other_bind_groups,
             );
             hblur_pass = &self.hblur1_pass;
         }
@@ -398,6 +396,7 @@ impl Post {
             &self.composite_pipeline,
             &self.composite_pass,
             image_out,
+            other_bind_groups,
         );
 
         // for some number of blur steps:
@@ -424,6 +423,7 @@ impl Post {
         pipeline: &wgpu::RenderPipeline,
         pass: &PostPass,
         image_out: &wgpu::TextureView,
+        other_bind_groups: &[&wgpu::BindGroup],
     ) {
         let mut render_pass =
             encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -439,12 +439,15 @@ impl Post {
                 depth_stencil_attachment: None,
             });
         render_pass.set_pipeline(pipeline);
-        // render_pass.set_bind_group(
-        //     pass.bind_group_index,
-        //     &pass.bind_group,
-        //     &[],
-        // );
-        render_pass.set_bind_group(0, &pass.bind_group, &[]);
+        for (i, bg) in other_bind_groups.iter().enumerate() {
+            render_pass.set_bind_group(i as u32, bg, &[]);
+        }
+        render_pass.set_bind_group(
+            pass.bind_group_index,
+            &pass.bind_group,
+            &[],
+        );
+        // render_pass.set_bind_group(0, &pass.bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.draw(0..self.vertex_count, 0..1);
     }

@@ -15,23 +15,18 @@ fn vs_main(
     return VertexOutput(position, coord);
 }
 
-// [[stage(vertex)]]
-// fn vs_main([[location(0)]] pos: vec4<f32>) -> [[builtin(position)]] vec4<f32> {
-//     return pos;
-// }
-
 // Fragment Shader
 
 struct PostUniform {
     axis: u32;
 };
-[[group(0), binding(0)]]
+[[group(2), binding(0)]]
 var<uniform> post: PostUniform;
 
-[[group(0), binding(1)]]
+[[group(2), binding(1)]]
 var t_image: texture_2d<f32>;
 
-[[group(0), binding(2)]]
+[[group(2), binding(2)]]
 var s_image: sampler;
 
 let offsets: array<f32, 3> = array<f32, 3>(0.0, 1.3846153846, 3.2307692308);
@@ -137,10 +132,10 @@ fn fs_vertical_blur_main(
 let EXPOSURE: f32 = 1.0;
 let GAMMA: f32 = 2.2;
 
-[[group(0), binding(3)]]
+[[group(2), binding(3)]]
 var t_bright: texture_2d<f32>;
 
-[[group(0), binding(4)]]
+[[group(2), binding(4)]]
 var s_bright: sampler;
 
 [[stage(fragment)]]
