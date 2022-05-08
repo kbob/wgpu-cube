@@ -198,4 +198,5 @@ fn fs_composite_main(
     let gc_color = mapped_color;
 
     return vec4<f32>(gc_color, 1.0);
+    // return vec4<f32>(bright_color, 1.0);
 }

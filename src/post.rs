@@ -1,7 +1,7 @@
 use crate::binding;
 use wgpu::util::DeviceExt;
 
-const BLUR_STEPS: u32 = 2;
+const BLUR_STEPS: u32 = 32;
 const BLACK: wgpu::Color = wgpu::Color {
     r: 0.0,
     g: 0.0,

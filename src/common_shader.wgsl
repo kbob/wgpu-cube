@@ -746,17 +746,32 @@ fn fs_cube_face_main(in: CubeFaceVertexOutput) -> CubeFaceFragmentOutput {
     let pix_pos = pix_coord - pix_center;
     let pix_r2: f32 = pix_pos.x * pix_pos.x + pix_pos.y * pix_pos.y;
     var color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    // if (pix_r2 < led_r2) {
+    //     color = led_color(tex_index);
+    // } else if (USE_BRDF_FLAG) {
+    //     color = face_color_brdf(tex_index, N, V, world_pos);
+    // } else {
+    //     color = face_color_classic(tex_index, N, V, world_pos);
+    // }
+    // let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+    // var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    // if (brightness > 1.0) {
+    //     bright_color = vec4<f32>(color.rgb, 1.0);
+    // }
+    // var out: CubeFaceFragmentOutput;
+    // out.color = color;
+    // out.bright_color = bright_color;
+    // return out;
+    var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
     if (pix_r2 < led_r2) {
         color = led_color(tex_index);
+        if (max(max(color.r, color.g), color.b) > 1.0) {
+            bright_color = color;
+        }
     } else if (USE_BRDF_FLAG) {
         color = face_color_brdf(tex_index, N, V, world_pos);
     } else {
         color = face_color_classic(tex_index, N, V, world_pos);
-    }
-    let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
-    var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
-    if (brightness > 1.0) {
-        bright_color = vec4<f32>(color.rgb, 1.0);
     }
     var out: CubeFaceFragmentOutput;
     out.color = color;
@@ -850,11 +865,11 @@ fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> CubeEdgeFragmentOutput {
     } else {
         color = edge_color_classic(N, V, in.world_position);
     }
-    let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+    // let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
     var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
-    if (brightness > 1.0) {
-        bright_color = vec4<f32>(color.rgb, 1.0);
-    }
+    // if (brightness > 1.0) {
+    //     bright_color = vec4<f32>(color.rgb, 1.0);
+    // }
     var out: CubeFaceFragmentOutput;
     out.color = color;
     out.bright_color = bright_color;
@@ -956,11 +971,11 @@ fn fs_floor_main(in: FloorVertexOutput) -> FloorFragmentOutput {
     } else {
         color = floor_color_classic(t_coord, N, V, in.world_position);
     }
-    let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+    // let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
     var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
-    if (brightness > 1.0) {
-        bright_color = vec4<f32>(color.rgb, 1.0);
-    }
+    // if (brightness > 1.0) {
+    //     bright_color = vec4<f32>(color.rgb, 1.0);
+    // }
     var out: FloorFragmentOutput;
     out.color = color;
     out.bright_color = bright_color;
