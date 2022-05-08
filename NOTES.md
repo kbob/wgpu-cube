@@ -213,25 +213,21 @@ resources.
 
 ## Quaternions and Rotations
 
-### **[Exponentially Better Rotations](https://thenumbat.github.io/Exponential-Rotations/)**
-
+**[Exponentially Better Rotations](https://thenumbat.github.io/Exponential-Rotations/)**<br>
 *Max Slater*<br>
 Rotation math.  Hurts head.
 
-### **[Visualizing Quaternions](https://eater.net/quaternions)**
-
+**[Visualizing Quaternions](https://eater.net/quaternions)**<br>
 *Grant Sanderson, Ben Eater*<br>
 Rotation math.  Hurts head but with "interactive video".
 
 ## Deferred Rendering
 
-### **[Deferred Shading](https://learnopengl.com/Advanced-Lighting/Deferred-Shading)**
-
-*Learn OpenGl*<br>
+**[Deferred Shading](https://learnopengl.com/Advanced-Lighting/Deferred-Shading)**<br>
+*Joey de Vries, Learn OpenGl*<br>
 Explains deferred shading and implements it in OpenGL.
 
-### **[Deferred Shading](https://ogldev.org/www/tutorial35/tutorial35.html)**
-
+**[Deferred Shading](https://ogldev.org/www/tutorial35/tutorial35.html)**<br>
 *Etay Meiri, OGL dev*<br>
 Another deferred shading tutorial in OpenGL.<br>
 [Part 1](https://ogldev.org/www/tutorial35/tutorial35.html)<br>
@@ -240,77 +236,71 @@ Another deferred shading tutorial in OpenGL.<br>
 
 ## Shadow Maps
 
-### **[Real-time Shadows](https://docs.google.com/presentation/d/1MwJcnSvkAzpT8BuoSqIkzlYLjdA_lBDrt8bW-vcwmDU/edit#slide=id.p)**
-
+**[Real-time Shadows](https://docs.google.com/presentation/d/1MwJcnSvkAzpT8BuoSqIkzlYLjdA_lBDrt8bW-vcwmDU/edit#slide=id.p)**<br>
 *Javi Agenjo 2020*<br>
 Slide show gives a good overview of shadow mapping techniques.
 
-### **[Depth Precision Visualized](https://developer.nvidia.com/content/depth-precision-visualized)**
-
+**[Depth Precision Visualized](https://developer.nvidia.com/content/depth-precision-visualized)**<br>
 *Nathan Reed, NVIDIA Developer Content*<br>
 Explains depth buffer resolution nonlinearities.
 Basically, Znear = +1, Zfar = 0 is best.  Zfar = +1 (DirectX) or -1
 (OpenGL) significantly reduces a floating point Z buffer's linearity.
 
-### **[Shadow Map Antialiasing](https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing)**
-
+**[Shadow Map Antialiasing](https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing)**<br>
 *Michael Bunnel, Fabio Pellacini, GPU Gems*<br>
 How to multisample a shadow map for smooth edges
 
 ## Virtual Trackballs
 
-### **Virtual Trackballs Revisited**
-
+**Virtual Trackballs Revisited**<br>
 *Henriksen, Sporing, Hornbaek*<br>
 DOI:10.1109/TVCG.2004.1260772<br>
 Reviews and compares three trackball models.
 
-### **[Virtual Trackballs and the Exponential Map](http://math.umd.edu/~gogo/Papers/trackballExp.pdf)**
-
+**[Virtual Trackballs and the Exponential Map](http://math.umd.edu/~gogo/Papers/trackballExp.pdf)**<br>
 *Stantchev, U. of Maryland*<br>
 This appears to be a good trackball model.
 
 ## Disney Shading
 
-### **[Physically Based Shading at Disney](https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf)**
-
+**[Physically Based Shading at Disney](https://media.disneyanimation.com/uploads/production/publication_asset/48/asset/s2012_pbs_disney_brdf_notes_v3.pdf)**<br>
 *Brent Burley, Walt Disney Animation Studios*<br>
 Explains Disney Animation's PBR material model in 2012.<br>
 [SIGGRAPH 2012 Course](https://web.archive.org/web/20170531155921/http://blog.selfshadow.com/publications/s2012-shading-course/)<br>
 [SIGGRAPH 2012 Slides](https://web.archive.org/web/20170531155921/http://blog.selfshadow.com/publications/s2012-shading-course/burley/s2012_pbs_disney_brdf_slides_v2.pdf)<br>
 [Disney BRDF Explorer](https://github.com/wdas/brdf)<br>
 
-### **[Implementing Disney Principled BRDF in Arnold](https://web.archive.org/web/20170602195106/http://shihchin.com/2015/07/implementing-disney-principled-brdf-in.html)**
-
+**[Implementing Disney Principled BRDF in Arnold](https://web.archive.org/web/20170602195106/http://shihchin.com/2015/07/implementing-disney-principled-brdf-in.html)**<br>
 *Shih-Chin, 2015*<br>
 [Source Repository](https://github.com/shihchinw/rlShaders)<br>
 [Dev Reel](https://vimeo.com/150344036)<br>
 
 ## Advanced Lighting
 
-### **[Advanced Lighting: Bloom](https://learnopengl.com/Advanced-Lighting/Bloom)**
+**[Advanced Lighting: Bloom](https://learnopengl.com/Advanced-Lighting/Bloom)**<br>
+*Joey de Vries, Learn OpenGL*<br>
 
-*Learn OpenGL*<br>
-
-### **[Efficient Gaussian Blur with Linear Sampling](https://www.rastergrid.com/blog/2010/09/efficient-Gaussian-blur-with-linear-sampling/)**
-
+**[Efficient Gaussian Blur with Linear Sampling](https://www.rastergrid.com/blog/2010/09/efficient-Gaussian-blur-with-linear-sampling/)**<br>
 *Daniel Rákos, rastergrid*<br>
+
+**[Tone Mapping](https://64.github.io/tonemapping/)**<br>
+*Matt Taylor, 'blog*
+
+**[Filmic Tonemapping with Piecewise Power Curves](http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/)**<br>
+*John Hable, 'blog*<br>
 
 ## Shaders
 
-### **[The Book of Shaders](https://thebookofshaders.com)**
-
+**[The Book of Shaders](https://thebookofshaders.com)**<br>
 *Patricio Gonzalez Vivo, Jen Lowe*
 Noise, procedural textures, ray marching, and more.
 
 ## Tools
 
-### **[Debugging with Xcode](https://github.com/gfx-rs/wgpu/wiki/Debugging-with-Xcode)**
-
+**[Debugging with Xcode](https://github.com/gfx-rs/wgpu/wiki/Debugging-with-Xcode)**<br>
 *Joshua Groves, wgpu-rs Wiki*<br>
 You can run wgpu programs under Xcode to use the Metal inspector.
 
-### **[Developing and Debugging Metal Shaders](https://developer.apple.com/documentation/metal/developing_and_debugging_metal_shaders)**
-
+**[Developing and Debugging Metal Shaders](https://developer.apple.com/documentation/metal/developing_and_debugging_metal_shaders)**<br>
 *Apple*
 Xcode has a very useful Metal debugging inspector.

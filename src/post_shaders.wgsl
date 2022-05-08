@@ -129,6 +129,11 @@ fn fs_vertical_blur_main(
     return vec4<f32>(color, 1.0);
 }
 
+// Composite Shader
+//   - blend LDR and bright colors.
+//   - tone mapping
+//   - gamma correction
+
 let EXPOSURE: f32 = 1.0;
 let GAMMA: f32 = 2.2;
 
@@ -138,20 +143,55 @@ var t_bright: texture_2d<f32>;
 [[group(2), binding(4)]]
 var s_bright: sampler;
 
+
+fn luminance(c: vec3<f32>) -> f32 {
+    return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
+}
+
+fn exposure_tone_map(C: vec3<f32>, exposure: f32) -> vec3<f32> {
+    return 1.0 - exp(-C * exposure);
+}
+
+fn reinhard_simple_tone_map(C: vec3<f32>) -> vec3<f32> {
+    return C / (1.0 + C);
+}
+
+fn reinhard_extended_tone_map(C: vec3<f32>, Cwhite: f32) -> vec3<f32> {
+    let numerator = C * (1.0 + (C / (Cwhite * Cwhite)));
+    return numerator / (1.0 + C);
+}
+
+fn reinhard_luminance_tone_map(C: vec3<f32>, Lwhite: f32) -> vec3<f32> {
+    let l_old = luminance(C);
+    if (l_old > 0.0) {
+        let numerator = l_old * (1.0 + (l_old / (Lwhite * Lwhite)));
+        let l_new = numerator / (1.0 + l_old);
+        return C * (l_new / l_old);
+    } else {
+        return C;
+    }
+}
+
+// fn reinhard_jodie_tone_map(C: vec3<f32>) -> vec3<f32> {}
+// fn uncharted2_filmic_tone_map(C: vec3<f32>) -> vec3<f32> {}
+// fn aces_fitted_tone_map(C: vec3<f32>) -> vec3<f32> {}
+
 [[stage(fragment)]]
 fn fs_composite_main(
     in: VertexOutput,
 ) -> [[location(0)]] vec4<f32> {
     let coord = in.coord;
-    let image_size = vec2<f32>(textureDimensions(t_image));
 
     let index = vec2<i32>(in.position.xy + 0.5);
     let ldr_color = textureLoad(t_image, index, 0).rgb;
     let bright_color = textureLoad(t_bright, index, 0).rgb;
     let hdr_color = ldr_color + bright_color;
 
-    // tone_mapping
-    let mapped_color = vec3<f32>(1.0) - exp(-hdr_color * EXPOSURE);
+    // tone mapping
+    // let mapped_color = exposure_tone_map(hdr_color, EXPOSURE);
+    // let mapped_color = reinhard_simple_tone_map(hdr_color);
+    // let mapped_color = reinhard_extended_tone_map(hdr_color, 2.0);
+    let mapped_color = reinhard_luminance_tone_map(hdr_color, 2.0);
 
     // correct gamma
     // let gc_color = pow(mapped_color, vec3<f32>(1.0 / GAMMA));
