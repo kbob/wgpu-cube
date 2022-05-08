@@ -47,10 +47,13 @@ struct PostPass {
 pub struct Post {
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
+    uniform_buffer: wgpu::Buffer,
     pub ldr_color: wgpu::TextureView,
     pub bright_color: wgpu::TextureView,
     ping: wgpu::TextureView,
     pong: wgpu::TextureView,
+    blur_pass_bindings: binding::BlurPassBindings,
+    composite_pass_bindings: binding::CompositePassBindings,
     hblur_pipeline: wgpu::RenderPipeline,
     vblur_pipeline: wgpu::RenderPipeline,
     composite_pipeline: wgpu::RenderPipeline,
@@ -106,10 +109,9 @@ fn create_framebuffer(
     width: u32,
     height: u32,
     color_format: wgpu::TextureFormat,
-) -> (wgpu::TextureView, wgpu::Sampler) {
+) -> wgpu::TextureView {
     let texture_label = String::from(label) + "_texture";
     let view_label = String::from(label) + "_view";
-    let sampler_label = String::from(label) + "_sampler";
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some(&texture_label),
         size: wgpu::Extent3d {
@@ -124,12 +126,16 @@ fn create_framebuffer(
         usage: wgpu::TextureUsages::TEXTURE_BINDING
             | wgpu::TextureUsages::RENDER_ATTACHMENT,
     });
-    let view = texture.create_view(&wgpu::TextureViewDescriptor {
+
+    texture.create_view(&wgpu::TextureViewDescriptor {
         label: Some(&view_label),
         ..Default::default()
-    });
-    let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some(&sampler_label),
+    })
+}
+
+fn create_sampler(label: &str, device: &wgpu::Device) -> wgpu::Sampler {
+    device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some(label),
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
         address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -137,9 +143,7 @@ fn create_framebuffer(
         min_filter: wgpu::FilterMode::Linear,
         mipmap_filter: wgpu::FilterMode::Nearest,
         ..Default::default()
-    });
-
-    (view, sampler)
+    })
 }
 
 fn create_pipeline(
@@ -184,13 +188,11 @@ fn create_pipeline(
         fragment: Some(wgpu::FragmentState {
             module: &shader_module,
             entry_point: fragment_entry,
-            targets: &[
-                wgpu::ColorTargetState {
-                    format: color_format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                },
-            ],
+            targets: &[wgpu::ColorTargetState {
+                format: color_format,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            }],
         }),
         multiview: None,
     })
@@ -211,34 +213,41 @@ impl Post {
         let (vertex_buffer, vertex_count) = create_vertex_buffer(device);
 
         // Framebuffers
-        let (ldr_color, ldr_color_sampler) = create_framebuffer(
+        let ldr_color = create_framebuffer(
             "ldr_color",
             device,
             width,
             height,
-            color_format,
+            crate::LDR_COLOR_PIXEL_FORMAT,
         );
-        let (bright_color, bright_color_sampler) = create_framebuffer(
+        let bright_color = create_framebuffer(
             "bright_color",
             device,
             width,
             height,
             crate::BRIGHT_COLOR_PIXEL_FORMAT,
         );
-        let (ping, ping_sampler) = create_framebuffer(
+        let ping = create_framebuffer(
             "ping",
             device,
             width,
             height,
             crate::BRIGHT_COLOR_PIXEL_FORMAT,
         );
-        let (pong, pong_sampler) = create_framebuffer(
+        let pong = create_framebuffer(
             "pong",
             device,
             width,
             height,
             crate::BRIGHT_COLOR_PIXEL_FORMAT,
         );
+
+        // Framebuffer samplers
+        let ldr_color_sampler = create_sampler("ldr_color_sampler", device);
+        let bright_color_sampler =
+            create_sampler("bright_color_sampler", device);
+        let ping_sampler = create_sampler("ping_sampler", device);
+        let pong_sampler = create_sampler("pong_sampler", device);
 
         // Bind Group Layouts
         let blur_pass_bindings = binding::BlurPassBindings::new(device);
@@ -343,10 +352,13 @@ impl Post {
         Self {
             vertex_buffer,
             vertex_count,
+            uniform_buffer,
             ldr_color,
             bright_color,
             ping,
             pong,
+            blur_pass_bindings,
+            composite_pass_bindings,
             hblur_pipeline,
             vblur_pipeline,
             composite_pipeline,
@@ -361,7 +373,70 @@ impl Post {
         &self.ldr_color
     }
 
-    pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {}
+    pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
+        self.ldr_color = create_framebuffer(
+            "ldr_color",
+            device,
+            width,
+            height,
+            crate::LDR_COLOR_PIXEL_FORMAT,
+        );
+        self.bright_color = create_framebuffer(
+            "bright_color",
+            device,
+            width,
+            height,
+            crate::BRIGHT_COLOR_PIXEL_FORMAT,
+        );
+        self.ping = create_framebuffer(
+            "ping",
+            device,
+            width,
+            height,
+            crate::BRIGHT_COLOR_PIXEL_FORMAT,
+        );
+        self.pong = create_framebuffer(
+            "pong",
+            device,
+            width,
+            height,
+            crate::BRIGHT_COLOR_PIXEL_FORMAT,
+        );
+        let ldr_color_sampler = create_sampler("ldr_color_sampler", device);
+        let bright_color_sampler =
+            create_sampler("bright_color_sampler", device);
+        let ping_sampler = create_sampler("ping_sampler", device);
+        let pong_sampler = create_sampler("pong_sampler", device);
+        self.hblur0_pass.bind_group =
+            self.blur_pass_bindings.create_bind_group(
+                device,
+                self.uniform_buffer.as_entire_binding(),
+                wgpu::BindingResource::TextureView(&self.bright_color),
+                wgpu::BindingResource::Sampler(&bright_color_sampler),
+            );
+        self.hblur1_pass.bind_group =
+            self.blur_pass_bindings.create_bind_group(
+                device,
+                self.uniform_buffer.as_entire_binding(),
+                wgpu::BindingResource::TextureView(&self.ping),
+                wgpu::BindingResource::Sampler(&ping_sampler),
+            );
+        self.vblur_pass.bind_group = self.blur_pass_bindings.create_bind_group(
+            device,
+            self.uniform_buffer.as_entire_binding(),
+            wgpu::BindingResource::TextureView(&self.pong),
+            wgpu::BindingResource::Sampler(&pong_sampler),
+        );
+        self.composite_pass.bind_group =
+            self.composite_pass_bindings.create_bind_group(
+                device,
+                self.uniform_buffer.as_entire_binding(),
+                wgpu::BindingResource::TextureView(&self.ldr_color),
+                wgpu::BindingResource::Sampler(&ldr_color_sampler),
+                wgpu::BindingResource::TextureView(&self.ping),
+                wgpu::BindingResource::Sampler(&ping_sampler),
+            );
+    }
 
     pub fn render(
         &self,
@@ -447,7 +522,6 @@ impl Post {
             &pass.bind_group,
             &[],
         );
-        // render_pass.set_bind_group(0, &pass.bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.draw(0..self.vertex_count, 0..1);
     }

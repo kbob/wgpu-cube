@@ -26,6 +26,9 @@ const BACKFACE_CULL: bool = true;
 const ALPHA_BLENDING: bool = false;
 const SAMPLE_COUNT: u32 = 4;
 const PRINT_FPS: bool = true;
+const DO_HDR_POSTPROCESSING: bool = true;
+pub const LDR_COLOR_PIXEL_FORMAT: wgpu::TextureFormat =
+    wgpu::TextureFormat::Rgba8Unorm;
 pub const BRIGHT_COLOR_PIXEL_FORMAT: wgpu::TextureFormat =
     wgpu::TextureFormat::Rgba16Float;
 
@@ -220,6 +223,7 @@ struct State {
     cube: cube::Cube,                   // Upstate bison upstate...
     cube_trackball: trackball::Trackball,
     floor: floor::Floor,                // ... bison baffle baffle...
+    forward_color_format: wgpu::TextureFormat,
     cube_face_forward_pipeline: wgpu::RenderPipeline,
     cube_edge_forward_pipeline: wgpu::RenderPipeline,
     floor_forward_pipeline: wgpu::RenderPipeline,
@@ -305,6 +309,12 @@ impl State {
 
         let floor = floor::Floor::new(&device, &queue);
 
+        // Output Color Format
+        let forward_color_format = match DO_HDR_POSTPROCESSING {
+            true => LDR_COLOR_PIXEL_FORMAT,
+            false => config.format,
+        };
+
         // Depth Texture
 
         let depth_texture = texture::Texture::create_depth_texture(
@@ -324,7 +334,10 @@ impl State {
             &device,
             config.width,
             config.height,
-            config.format,
+            match DO_HDR_POSTPROCESSING {
+                true => crate::LDR_COLOR_PIXEL_FORMAT,
+                false => forward_color_format,
+            },
             "multisampled_frambeuffer",
         );
 
@@ -400,7 +413,7 @@ impl State {
                 "cube_face_forward_pipeline",
                 &device,
                 &layout,
-                config.format,
+                forward_color_format,
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[
                     cube_model::FaceVertex::desc(),
@@ -428,7 +441,7 @@ impl State {
                 "cube_edge_forward_pipeline",
                 &device,
                 &layout,
-                config.format,
+                forward_color_format,
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[cube_model::EdgeVertex::desc()],
                 &common_shader,
@@ -453,7 +466,7 @@ impl State {
                 "floor_forward_pipeline",
                 &device,
                 &layout,
-                config.format,
+                forward_color_format,
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[floor::FloorVertexRaw::desc()],
                 &common_shader,
@@ -562,6 +575,7 @@ impl State {
             cube,
             cube_trackball,
             floor,
+            forward_color_format,
             cube_face_forward_pipeline,
             cube_edge_forward_pipeline,
             floor_forward_pipeline,
@@ -599,26 +613,9 @@ impl State {
                 &self.device,
                 self.config.width,
                 self.config.height,
-                self.config.format,
+                self.forward_color_format,
                 "multisampled_framebuffer (resize)",
             );
-            // self.bright_color = self
-            //     .device
-            //     .create_texture(&wgpu::TextureDescriptor {
-            //         label: Some("bright_color"),
-            //         size: wgpu::Extent3d {
-            //             width: self.config.width,
-            //             height: self.config.height,
-            //             depth_or_array_layers: 1,
-            //         },
-            //         mip_level_count: 1,
-            //         sample_count: 1,
-            //         dimension: wgpu::TextureDimension::D2,
-            //         format: BRIGHT_COLOR_PIXEL_FORMAT,
-            //         usage: wgpu::TextureUsages::TEXTURE_BINDING
-            //             | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            //     })
-            //     .create_view(&wgpu::TextureViewDescriptor::default());
             self.multisampled_bright_color = create_multisampled_framebuffer(
                 &self.device,
                 self.config.width,
@@ -626,6 +623,8 @@ impl State {
                 BRIGHT_COLOR_PIXEL_FORMAT,
                 "multisampled_bright_color (resize)",
             );
+            self.post
+                .resize(&self.device, new_size.width, new_size.height);
             self.cube_trackball.set_viewport_size(&new_size);
         }
     }
@@ -756,17 +755,22 @@ impl State {
             // Inner scope ensures prepared data created above outlives
             // the render pass.
 
+            let output_view = match DO_HDR_POSTPROCESSING {
+                true => self.post.input_framebuffer(),
+                false => &view,
+            };
+
             let color_view: &wgpu::TextureView;
             let color_resolve_target: Option<&wgpu::TextureView>;
             match &self.multisampled_framebuffer {
                 Some(msfb) => {
                     color_view = &msfb;
                     // color_resolve_target = Some(&view);
-                    color_resolve_target = Some(self.post.input_framebuffer());
+                    color_resolve_target = Some(output_view);
                 }
                 None => {
                     // color_view = &view;
-                    color_view = self.post.input_framebuffer();
+                    color_view = output_view;
                     color_resolve_target = None;
                 }
             }
@@ -883,13 +887,15 @@ impl State {
         }
 
         // Post Processing
-        self.post.render(
-            &self.device,
-            &self.queue,
-            &mut encoder,
-            &view,
-            &[&self.static_bind_group, &self.frame_bind_group],
-        );
+        if DO_HDR_POSTPROCESSING {
+            self.post.render(
+                &self.device,
+                &self.queue,
+                &mut encoder,
+                &view,
+                &[&self.static_bind_group, &self.frame_bind_group],
+            );
+        }
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
