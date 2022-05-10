@@ -629,7 +629,7 @@ let cube_face_base_color: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
 // let led_base_color: vec4<f32> = vec4<f32>(0.06, 0.06, 0.06, 1.0);
 let led_base_color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
 let led_r2: f32 = 0.15;
-let led_brightness: f32 = 4.0;
+let led_brightness: f32 = 2.0;
 
 fn face_color_brdf(
     tex_index: vec2<i32>,

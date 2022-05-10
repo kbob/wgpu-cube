@@ -48,8 +48,7 @@ pub struct Post {
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
     uniform_buffer: wgpu::Buffer,
-    pub ldr_color: wgpu::TextureView,
-    pub bright_color: wgpu::TextureView,
+    ldr_color: wgpu::TextureView,
     ping: wgpu::TextureView,
     pong: wgpu::TextureView,
     blur_pass_bindings: binding::BlurPassBindings,
@@ -57,8 +56,7 @@ pub struct Post {
     hblur_pipeline: wgpu::RenderPipeline,
     vblur_pipeline: wgpu::RenderPipeline,
     composite_pipeline: wgpu::RenderPipeline,
-    hblur0_pass: PostPass,
-    hblur1_pass: PostPass,
+    hblur_pass: PostPass,
     vblur_pass: PostPass,
     composite_pass: PostPass,
 }
@@ -220,13 +218,6 @@ impl Post {
             height,
             crate::LDR_COLOR_PIXEL_FORMAT,
         );
-        let bright_color = create_framebuffer(
-            "bright_color",
-            device,
-            width,
-            height,
-            crate::BRIGHT_COLOR_PIXEL_FORMAT,
-        );
         let ping = create_framebuffer(
             "ping",
             device,
@@ -244,8 +235,6 @@ impl Post {
 
         // Framebuffer samplers
         let ldr_color_sampler = create_sampler("ldr_color_sampler", device);
-        let bright_color_sampler =
-            create_sampler("bright_color_sampler", device);
         let ping_sampler = create_sampler("ping_sampler", device);
         let pong_sampler = create_sampler("pong_sampler", device);
 
@@ -255,13 +244,7 @@ impl Post {
             binding::CompositePassBindings::new(device);
 
         // Bind Groups
-        let hblur0_bind_group = blur_pass_bindings.create_bind_group(
-            device,
-            uniform_buffer.as_entire_binding(),
-            wgpu::BindingResource::TextureView(&bright_color),
-            wgpu::BindingResource::Sampler(&bright_color_sampler),
-        );
-        let hblur1_bind_group = blur_pass_bindings.create_bind_group(
+        let hblur_bind_group = blur_pass_bindings.create_bind_group(
             device,
             uniform_buffer.as_entire_binding(),
             wgpu::BindingResource::TextureView(&ping),
@@ -325,16 +308,10 @@ impl Post {
             color_format,
         );
 
-        let hblur0_pass = PostPass {
-            render_pass_label: String::from("horizontal_blur_0_render_pass"),
-            bind_group_index: binding::BlurPassBindings::GROUP_INDEX,
-            bind_group: hblur0_bind_group,
-        };
-
-        let hblur1_pass = PostPass {
+        let hblur_pass = PostPass {
             render_pass_label: String::from("horizontal_blur_1_render_pass"),
             bind_group_index: binding::BlurPassBindings::GROUP_INDEX,
-            bind_group: hblur1_bind_group,
+            bind_group: hblur_bind_group,
         };
 
         let vblur_pass = PostPass {
@@ -354,7 +331,6 @@ impl Post {
             vertex_count,
             uniform_buffer,
             ldr_color,
-            bright_color,
             ping,
             pong,
             blur_pass_bindings,
@@ -362,8 +338,7 @@ impl Post {
             hblur_pipeline,
             vblur_pipeline,
             composite_pipeline,
-            hblur0_pass,
-            hblur1_pass,
+            hblur_pass,
             vblur_pass,
             composite_pass,
         }
@@ -373,6 +348,10 @@ impl Post {
         &self.ldr_color
     }
 
+    pub fn bright_framebuffer(&self) -> &wgpu::TextureView {
+        &self.ping
+    }
+
     pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
         self.ldr_color = create_framebuffer(
             "ldr_color",
@@ -380,13 +359,6 @@ impl Post {
             width,
             height,
             crate::LDR_COLOR_PIXEL_FORMAT,
-        );
-        self.bright_color = create_framebuffer(
-            "bright_color",
-            device,
-            width,
-            height,
-            crate::BRIGHT_COLOR_PIXEL_FORMAT,
         );
         self.ping = create_framebuffer(
             "ping",
@@ -403,18 +375,9 @@ impl Post {
             crate::BRIGHT_COLOR_PIXEL_FORMAT,
         );
         let ldr_color_sampler = create_sampler("ldr_color_sampler", device);
-        let bright_color_sampler =
-            create_sampler("bright_color_sampler", device);
         let ping_sampler = create_sampler("ping_sampler", device);
         let pong_sampler = create_sampler("pong_sampler", device);
-        self.hblur0_pass.bind_group =
-            self.blur_pass_bindings.create_bind_group(
-                device,
-                self.uniform_buffer.as_entire_binding(),
-                wgpu::BindingResource::TextureView(&self.bright_color),
-                wgpu::BindingResource::Sampler(&bright_color_sampler),
-            );
-        self.hblur1_pass.bind_group =
+        self.hblur_pass.bind_group =
             self.blur_pass_bindings.create_bind_group(
                 device,
                 self.uniform_buffer.as_entire_binding(),
@@ -446,14 +409,11 @@ impl Post {
         image_out: &wgpu::TextureView,
         other_bind_groups: &[&wgpu::BindGroup],
     ) {
-        // First blur pass, we read from ldr_color.
-        // Subsequent blur passes, we read from pong.
-        let mut hblur_pass = &self.hblur0_pass;
         for _ in 0..BLUR_STEPS {
             self.render_post_pass(
                 encoder,
                 &self.hblur_pipeline,
-                hblur_pass,
+                &self.hblur_pass,
                 &self.pong,
                 other_bind_groups,
             );
@@ -464,7 +424,6 @@ impl Post {
                 &self.ping,
                 other_bind_groups,
             );
-            hblur_pass = &self.hblur1_pass;
         }
         self.render_post_pass(
             encoder,
@@ -473,23 +432,6 @@ impl Post {
             image_out,
             other_bind_groups,
         );
-
-        // for some number of blur steps:
-        //     create render pass
-        //     attach pipeline
-        //     set bind group
-        //     draw a big rectangle (or hexagon)
-        //     switch buffers
-        // do final composite, tone mapping, and gamma pass
-        //     (create render pass, attach pipeline, set bind group)
-        //     draw whole screen
-
-        // There are three framebuffers, ldr_color, ping and pong.
-        // the forward pass renders into ldr_color.
-        // the first horizontal blur copies ldr_color to ping.
-        // each vertical blur copies pong to ping.
-        // each subsequent horizontal blur copies ping to pong.
-        // the final composite copies ping to the output view.
     }
 
     fn render_post_pass(

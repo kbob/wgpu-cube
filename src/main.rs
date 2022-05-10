@@ -780,10 +780,10 @@ impl State {
             match &self.multisampled_bright_color {
                 Some(msfb) => {
                     bright_view = &msfb;
-                    bright_resolve_target = Some(&self.post.bright_color);
+                    bright_resolve_target = Some(&self.post.bright_framebuffer());
                 }
                 None => {
-                    bright_view = &self.post.bright_color;
+                    bright_view = &self.post.bright_framebuffer();
                     bright_resolve_target = None;
                 }
             }

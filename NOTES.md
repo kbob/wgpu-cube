@@ -221,6 +221,11 @@ Rotation math.  Hurts head.
 *Grant Sanderson, Ben Eater*<br>
 Rotation math.  Hurts head but with "interactive video".
 
+## Clipping
+
+**[Efficient Triangle and Quadrilateral Clipping within Shaders](https://www.tandfonline.com/doi/abs/10.1080/2151237X.2011.619891?journalCode=ujgt20)**<br>
+*Morgan McGuire, Journal of Graphics, GPU, and Game Tools*<br>
+
 ## Deferred Rendering
 
 **[Deferred Shading](https://learnopengl.com/Advanced-Lighting/Deferred-Shading)**<br>
@@ -282,6 +287,12 @@ Explains Disney Animation's PBR material model in 2012.<br>
 
 **[Efficient Gaussian Blur with Linear Sampling](https://www.rastergrid.com/blog/2010/09/efficient-Gaussian-blur-with-linear-sampling/)**<br>
 *Daniel Rákos, rastergrid*<br>
+
+**[How to do good bloom for HDR rendering](https://kalogirou.net/2006/05/20/how-to-do-good-bloom-for-hdr-rendering/)**<br>
+*Carilaos Kalogirou, 'blog*<br>
+Advocates mixing different sized Gaussian blurs, also suggests
+decimating the image before blurring.
+[Wayback Archive](https://web.archive.org/web/20101125124816/https://kalogirou.net/2006/05/20/how-to-do-good-bloom-for-hdr-rendering/)
 
 **[Tone Mapping](https://64.github.io/tonemapping/)**<br>
 *Matt Taylor, 'blog*
