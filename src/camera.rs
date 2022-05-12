@@ -72,6 +72,10 @@ impl Camera {
         }
     }
 
+    pub fn view_projection_matrix(&self) -> Mat4 {
+        self.build_view_projection_matrix()
+    }
+
     pub fn uniform_resource(&self) -> wgpu::BindingResource {
         self.uniform_buffer.as_entire_binding()
     }

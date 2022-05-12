@@ -1,16 +1,17 @@
 use crate::binding;
+use crate::bounds;
 use wgpu::util::DeviceExt;
 
 const BLUR_STEPS: usize = 3;
 const SCALING_STEPS: usize = 3;
 const PASS_COUNT: usize = 2 * BLUR_STEPS + 1;
-const _BLUR_RADIUS: usize = 3 * (BLUR_STEPS - SCALING_STEPS << SCALING_STEPS);
+const BLUR_RADIUS: u32 = (4 * BLUR_STEPS << SCALING_STEPS) as _;
 
 const BLACK: wgpu::Color = wgpu::Color {
     r: 0.0,
     g: 0.0,
     b: 0.0,
-    a: 1.0,
+    a: 0.0,
 };
 
 #[repr(C)]
@@ -488,6 +489,7 @@ impl Post {
         encoder: &mut wgpu::CommandEncoder,
         image_out: &wgpu::TextureView,
         other_bind_groups: &[&wgpu::BindGroup],
+        bloom_bounds: &bounds::Bounds,
     ) {
         for i in 0..BLUR_STEPS {
             self.render_post_pass(
@@ -497,6 +499,7 @@ impl Post {
                 &self.pong,
                 2 * i,
                 other_bind_groups,
+                Some(bloom_bounds),
             );
             self.render_post_pass(
                 encoder,
@@ -505,6 +508,7 @@ impl Post {
                 &self.ping,
                 2 * i + 1,
                 other_bind_groups,
+                Some(bloom_bounds),
             );
         }
         self.render_post_pass(
@@ -514,6 +518,7 @@ impl Post {
             image_out,
             2 * BLUR_STEPS,
             other_bind_groups,
+            None,
         );
     }
 
@@ -525,6 +530,7 @@ impl Post {
         image_out: &wgpu::TextureView,
         pass_number: usize,
         other_bind_groups: &[&wgpu::BindGroup],
+        bloom_bounds: Option<&bounds::Bounds>,
     ) {
         // const NEXT_LAST: usize = PASS_COUNT - 2;
         // let load_op = match pass_number {
@@ -557,11 +563,11 @@ impl Post {
                 }],
                 depth_stencil_attachment: None,
             });
-        let mut w = 1.0 / (1 << (pass_number + 2) / 2) as f32;
-        let mut h = 1.0 / (1 << (pass_number + 1) / 2) as f32;
+        let mut owf = 1.0 / (1 << (pass_number + 2) / 2) as f32;
+        let mut ohf = 1.0 / (1 << (pass_number + 1) / 2) as f32;
         if pass_number == 2 * BLUR_STEPS as usize {
-            w = 1.0;
-            h = 1.0;
+            owf = 1.0;
+            ohf = 1.0;
         }
         // println!("pass {} {}x{}", pass_number, w, h);
         // println!(
@@ -572,13 +578,42 @@ impl Post {
         //     (h * 1080.0) as u32,
         // );
         // XXX guessing
-        let l = (0.1 * w * self.config.width as f32) as u32;
-        let r = (0.65 * w * self.config.width as f32) as u32;
-        let t = ((1.0 - 0.95 * h) * self.config.height as f32) as u32;
-        let b = ((1.0 - 0.02 * h) * self.config.height as f32) as u32;
-        // println!("pass {}: t {}, b {}", pass_number, t, b);
-        // println!("b - t = {}", b - t);
-        if pass_number != PASS_COUNT - 1 {
+        if let Some(bounds) = bloom_bounds {
+            let cw = self.config.width;
+            let ch = self.config.height;
+            let cwf = cw as f32;
+            let chf = ch as f32;
+            // let l = (0.1 * owf * cwf) as u32;
+            // let r = (0.65 * owf * cwf) as u32;
+            // let t = ((1.0 - 0.95 * ohf) * chf as f32) as u32;
+            // let b = ((1.0 - 0.02 * ohf) * chf as f32) as u32;
+            // println!("old b: {}", b);
+            // bounds ops: union, intersection, grow, transform
+            // bloom_bounds * viewport_bounds
+            let l = 0.max(
+                ((bounds.xmin + 1.0) * 0.5 * owf * cwf) as i32
+                    - (BLUR_RADIUS as f32 * owf) as i32,
+            ) as u32;
+            let r = cw.min(
+                ((bounds.xmax + 1.0) * 0.5 * owf * cwf) as u32
+                    + (BLUR_RADIUS as f32 * owf) as u32,
+            );
+            let t = 0.max(
+                ((1.0 - ((1.0 + bounds.ymax) * 0.5) * ohf) * chf) as i32
+                    - (BLUR_RADIUS as f32 * ohf) as i32,
+            ) as u32;
+            let b = ch.min(
+                ((1.0 - ((1.0 + bounds.ymin) * 0.5) * ohf) * chf) as u32
+                    + (BLUR_RADIUS as f32 * ohf) as u32,
+            );
+
+            // println!("{:?}", bloom_bounds);
+            // println!("pass {}: l {}, r {}", pass_number, l, r);
+            // println!("        owf {} cw {} cwf {}", owf, cw, cwf);
+            // println!("pass {}: t {}, b {}", pass_number, t, b);
+            // println!("        ohf {} ch {} chf {}", ohf, ch, chf);
+            // println!("        b - t = {}", b - t);
+            // println!("BLUR_RADIUS = {}", BLUR_RADIUS);
             render_pass.set_scissor_rect(l, t, r - l, b - t);
         }
         render_pass.set_pipeline(pipeline);

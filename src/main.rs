@@ -7,6 +7,7 @@ use winit::{
 
 mod binding;
 mod blinky;
+mod bounds;
 mod camera;
 mod cube;
 mod cube_model;
@@ -19,6 +20,7 @@ mod texture;
 mod trackball;
 mod traits;
 
+use prelude::*;
 use trackball::{Manipulable, Responder};
 use traits::Renderable;
 
@@ -878,6 +880,7 @@ impl State {
                 &mut encoder,
                 &view,
                 &[&self.static_bind_group, &self.frame_bind_group],
+                &self.collect_cube_view_bounds(),
             );
         }
 
@@ -885,6 +888,20 @@ impl State {
         output.present();
 
         Ok(())
+    }
+
+    fn collect_cube_view_bounds(&self) -> bounds::Bounds {
+        let cube_to_world = &self.cube.cube_to_world;
+        let world_to_clip = self.camera.view_projection_matrix();
+        self.cube
+            .cube_corners
+            .iter()
+            .map(|corner| {
+                let corner_vec = corner.to_homogeneous();
+                let xformed = world_to_clip * cube_to_world * corner_vec;
+                Point3::from_homogeneous(xformed)
+            })
+            .collect()
     }
 }
 

@@ -178,6 +178,19 @@ impl CubeModel {
         out
     }
 
+    pub fn corners(&self) -> Vec<Point3> {
+        const S: f32 = FACE_LENGTH_MM / 2.0 + FACE_DISPLACEMENT_MM;
+        let mut corners = vec![];
+        for z in [-S, S] {
+            for y in [-S, S] {
+                for x in [-S, S] {
+                    corners.push(Point3::new(x, y, z));
+                }
+            }
+        }
+        corners
+    }
+
     fn parse_obj() -> tobj::LoadResult {
         let obj_source = include_str!("filleted_cube.obj");
         let string_reader = StringReader::new(obj_source);

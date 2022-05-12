@@ -51,7 +51,8 @@ impl FaceStaticInstanceRaw {
 
 pub struct Cube {
     // Whole Cube Data
-    cube_to_world: Mat4,
+    pub cube_to_world: Mat4,
+    pub cube_corners: Vec<Point3>,
     cube_uniform_buffer: wgpu::Buffer,
 
     // Face Data
@@ -91,6 +92,8 @@ impl Cube {
         let model = cube_model::CubeModel::new();
 
         let cube_to_world = Mat4::identity();
+
+        let cube_corners = model.corners();
 
         // N.B., the cube uniform buffer is not initialized.
         // It will be updated before the first render.
@@ -169,6 +172,7 @@ impl Cube {
 
         Self {
             cube_to_world,
+            cube_corners,
             cube_uniform_buffer,
 
             face_instance_count,
