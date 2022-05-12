@@ -293,10 +293,11 @@ impl BlurPassBindings {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: Self::POST_UNIFORM,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::VERTEX
+                            | wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
+                            has_dynamic_offset: true,
                             min_binding_size: None,
                         },
                         count: None,
@@ -374,10 +375,11 @@ impl CompositePassBindings {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: Self::POST_UNIFORM,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::VERTEX
+                            | wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
+                            has_dynamic_offset: true,
                             min_binding_size: None,
                         },
                         count: None,
@@ -407,7 +409,7 @@ impl CompositePassBindings {
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             sample_type: wgpu::TextureSampleType::Float {
-                                filterable: false,
+                                filterable: true,
                             },
                             view_dimension: wgpu::TextureViewDimension::D2,
                             multisampled: false,

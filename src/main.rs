@@ -216,7 +216,6 @@ struct State {
     depth_texture: texture::Texture,
     multisampled_framebuffer: Option<wgpu::TextureView>,
     multisampled_bright_color: Option<wgpu::TextureView>,
-    // bright_color: wgpu::TextureView,
     camera: camera::Camera,             // Buffalo buffalo Buffalo...
     lights: lights::Lights,             // ... buffalo buffalo buffalo...
     blinky: blinky::Blinky,             // ... Buffalo buffalo.
@@ -342,23 +341,6 @@ impl State {
         );
 
         // Bright color texture
-
-        // let bright_color = device
-        //     .create_texture(&wgpu::TextureDescriptor {
-        //         label: Some("bright_color"),
-        //         size: wgpu::Extent3d {
-        //             width: config.width,
-        //             height: config.height,
-        //             depth_or_array_layers: 1,
-        //         },
-        //         mip_level_count: 1,
-        //         sample_count: 1,
-        //         dimension: wgpu::TextureDimension::D2,
-        //         format: BRIGHT_COLOR_PIXEL_FORMAT,
-        //         usage: wgpu::TextureUsages::TEXTURE_BINDING
-        //             | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        //     })
-        //     .create_view(&wgpu::TextureViewDescriptor::default());
 
         let multisampled_bright_color = create_multisampled_framebuffer(
             &device,
@@ -548,9 +530,11 @@ impl State {
 
         let post = post::Post::new(
             &device,
-            config.width,
-            config.height,
-            config.format,
+            &post::Configuration {
+                width: config.width,
+                height: config.height,
+                format: config.format,
+            },
             &static_bindings.layout,
             &frame_bindings.layout,
         );
@@ -567,7 +551,6 @@ impl State {
             config,
             depth_texture,
             multisampled_framebuffer,
-            // bright_color,
             multisampled_bright_color,
             camera,
             lights,
@@ -780,7 +763,8 @@ impl State {
             match &self.multisampled_bright_color {
                 Some(msfb) => {
                     bright_view = &msfb;
-                    bright_resolve_target = Some(&self.post.bright_framebuffer());
+                    bright_resolve_target =
+                        Some(&self.post.bright_framebuffer());
                 }
                 None => {
                     bright_view = &self.post.bright_framebuffer();
@@ -794,7 +778,7 @@ impl State {
                     resolve_target: color_resolve_target,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(BACKGROUND_COLOR),
-                        store: true,
+                        store: false,
                     },
                 },
                 wgpu::RenderPassColorAttachment {
@@ -802,7 +786,7 @@ impl State {
                     resolve_target: bright_resolve_target,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::default()),
-                        store: true,
+                        store: false,
                     },
                 },
             ];
@@ -816,7 +800,7 @@ impl State {
                             view: &self.depth_texture.view,
                             depth_ops: Some(wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(z_far),
-                                store: true,
+                                store: false,
                             }),
                             stencil_ops: None,
                         },

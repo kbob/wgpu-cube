@@ -1,7 +1,11 @@
 use crate::binding;
 use wgpu::util::DeviceExt;
 
-const BLUR_STEPS: u32 = 32;
+const BLUR_STEPS: usize = 3;
+const SCALING_STEPS: usize = 3;
+const PASS_COUNT: usize = 2 * BLUR_STEPS + 1;
+const _BLUR_RADIUS: usize = 3 * (BLUR_STEPS - SCALING_STEPS << SCALING_STEPS);
+
 const BLACK: wgpu::Color = wgpu::Color {
     r: 0.0,
     g: 0.0,
@@ -12,8 +16,8 @@ const BLACK: wgpu::Color = wgpu::Color {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct PostUniformRaw {
-    blur_axis: u32,
-    _padding: [u32; 3],
+    image_size: [f32; 2],
+    output_size: [f32; 2],
 }
 
 #[repr(C)]
@@ -44,10 +48,29 @@ struct PostPass {
     bind_group: wgpu::BindGroup,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct Configuration {
+    pub format: wgpu::TextureFormat,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl Configuration {
+    fn with_format(&self, format: wgpu::TextureFormat) -> Self {
+        Self {
+            width: self.width,
+            height: self.height,
+            format,
+        }
+    }
+}
+
 pub struct Post {
+    config: Configuration,
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
     uniform_buffer: wgpu::Buffer,
+    uniform_aligned_size: usize,
     ldr_color: wgpu::TextureView,
     ping: wgpu::TextureView,
     pong: wgpu::TextureView,
@@ -61,16 +84,67 @@ pub struct Post {
     composite_pass: PostPass,
 }
 
-fn create_uniform_buffer(device: &wgpu::Device) -> wgpu::Buffer {
-    let data = PostUniformRaw {
-        blur_axis: 0,
-        _padding: [0, 0, 0],
+fn round_up(n: usize, align: u32) -> usize {
+    let align = align as usize;
+    (n + align - 1) / align * align
+}
+
+fn create_uniform_buffer(device: &wgpu::Device) -> (wgpu::Buffer, usize) {
+    let raw_size = std::mem::size_of::<PostUniformRaw>();
+    let min_align = device.limits().min_uniform_buffer_offset_alignment;
+    let aligned_size = round_up(raw_size, min_align);
+    let buffer_size = PASS_COUNT * aligned_size;
+    let mut data = vec![0u8; buffer_size];
+
+    let mut insert = |pos: usize, post: PostUniformRaw| {
+        let offset = pos * aligned_size;
+        let end = offset + raw_size;
+        *bytemuck::from_bytes_mut::<PostUniformRaw>(&mut data[offset..end]) =
+            post;
     };
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+
+    let mut image_size = [1.0, 1.0];
+    let mut output_size = [1.0, 1.0];
+    for i in 0..BLUR_STEPS as usize {
+        if i < SCALING_STEPS {
+            output_size[0] *= 0.5;
+        }
+        insert(
+            2 * i,
+            PostUniformRaw {
+                image_size,
+                output_size,
+            },
+        );
+        if i < SCALING_STEPS {
+            image_size[0] *= 0.5;
+            output_size[1] *= 0.5;
+        }
+        insert(
+            2 * i + 1,
+            PostUniformRaw {
+                image_size,
+                output_size,
+            },
+        );
+        if i < SCALING_STEPS {
+            image_size[1] *= 0.5;
+        }
+    }
+    insert(
+        2 * BLUR_STEPS,
+        PostUniformRaw {
+            image_size,
+            output_size: [1.0, 1.0],
+        },
+    );
+    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("post_uniform_buffer"),
-        contents: bytemuck::cast_slice(&[data]),
+        contents: bytemuck::cast_slice(&data),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-    })
+    });
+
+    (buffer, aligned_size)
 }
 
 fn create_vertex_buffer(device: &wgpu::Device) -> (wgpu::Buffer, u32) {
@@ -104,23 +178,21 @@ fn create_vertex_buffer(device: &wgpu::Device) -> (wgpu::Buffer, u32) {
 fn create_framebuffer(
     label: &str,
     device: &wgpu::Device,
-    width: u32,
-    height: u32,
-    color_format: wgpu::TextureFormat,
+    config: &Configuration,
 ) -> wgpu::TextureView {
     let texture_label = String::from(label) + "_texture";
     let view_label = String::from(label) + "_view";
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some(&texture_label),
         size: wgpu::Extent3d {
-            width: width,
-            height: height,
+            width: config.width,
+            height: config.height,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: color_format,
+        format: config.format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING
             | wgpu::TextureUsages::RENDER_ATTACHMENT,
     });
@@ -199,14 +271,15 @@ fn create_pipeline(
 impl Post {
     pub fn new(
         device: &wgpu::Device,
-        width: u32,
-        height: u32,
-        color_format: wgpu::TextureFormat,
+        config: &Configuration,
         static_binding_layout: &wgpu::BindGroupLayout,
         frame_binding_layout: &wgpu::BindGroupLayout,
     ) -> Self {
+        let config = *config;
         // Uniform Buffer
-        let uniform_buffer = create_uniform_buffer(device);
+        let (uniform_buffer, uniform_aligned_size) =
+            create_uniform_buffer(device);
+
         // Vertex Buffer
         let (vertex_buffer, vertex_count) = create_vertex_buffer(device);
 
@@ -214,23 +287,17 @@ impl Post {
         let ldr_color = create_framebuffer(
             "ldr_color",
             device,
-            width,
-            height,
-            crate::LDR_COLOR_PIXEL_FORMAT,
+            &config.with_format(crate::LDR_COLOR_PIXEL_FORMAT),
         );
         let ping = create_framebuffer(
             "ping",
             device,
-            width,
-            height,
-            crate::BRIGHT_COLOR_PIXEL_FORMAT,
+            &config.with_format(crate::BRIGHT_COLOR_PIXEL_FORMAT),
         );
         let pong = create_framebuffer(
             "pong",
             device,
-            width,
-            height,
-            crate::BRIGHT_COLOR_PIXEL_FORMAT,
+            &config.with_format(crate::BRIGHT_COLOR_PIXEL_FORMAT),
         );
 
         // Framebuffer samplers
@@ -244,21 +311,29 @@ impl Post {
             binding::CompositePassBindings::new(device);
 
         // Bind Groups
+        let uniform_resource =
+            wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: &uniform_buffer,
+                offset: 0,
+                size: wgpu::BufferSize::new(
+                    std::mem::size_of::<PostUniformRaw>() as _,
+                ),
+            });
         let hblur_bind_group = blur_pass_bindings.create_bind_group(
             device,
-            uniform_buffer.as_entire_binding(),
+            uniform_resource.clone(),
             wgpu::BindingResource::TextureView(&ping),
             wgpu::BindingResource::Sampler(&ping_sampler),
         );
         let vblur_bind_group = blur_pass_bindings.create_bind_group(
             device,
-            uniform_buffer.as_entire_binding(),
+            uniform_resource.clone(),
             wgpu::BindingResource::TextureView(&pong),
             wgpu::BindingResource::Sampler(&pong_sampler),
         );
         let composite_bind_group = composite_pass_bindings.create_bind_group(
             device,
-            uniform_buffer.as_entire_binding(),
+            uniform_resource.clone(),
             wgpu::BindingResource::TextureView(&ldr_color),
             wgpu::BindingResource::Sampler(&ldr_color_sampler),
             wgpu::BindingResource::TextureView(&ping),
@@ -305,11 +380,11 @@ impl Post {
             ],
             &shader_module,
             "fs_composite_main",
-            color_format,
+            config.format,
         );
 
         let hblur_pass = PostPass {
-            render_pass_label: String::from("horizontal_blur_1_render_pass"),
+            render_pass_label: String::from("horizontal_blur_render_pass"),
             bind_group_index: binding::BlurPassBindings::GROUP_INDEX,
             bind_group: hblur_bind_group,
         };
@@ -327,9 +402,11 @@ impl Post {
         };
 
         Self {
+            config,
             vertex_buffer,
             vertex_count,
             uniform_buffer,
+            uniform_aligned_size,
             ldr_color,
             ping,
             pong,
@@ -353,47 +430,50 @@ impl Post {
     }
 
     pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
+        self.config.width = width;
+        self.config.height = height;
         self.ldr_color = create_framebuffer(
             "ldr_color",
             device,
-            width,
-            height,
-            crate::LDR_COLOR_PIXEL_FORMAT,
+            &self.config.with_format(crate::LDR_COLOR_PIXEL_FORMAT),
         );
         self.ping = create_framebuffer(
             "ping",
             device,
-            width,
-            height,
-            crate::BRIGHT_COLOR_PIXEL_FORMAT,
+            &self.config.with_format(crate::BRIGHT_COLOR_PIXEL_FORMAT),
         );
         self.pong = create_framebuffer(
             "pong",
             device,
-            width,
-            height,
-            crate::BRIGHT_COLOR_PIXEL_FORMAT,
+            &self.config.with_format(crate::BRIGHT_COLOR_PIXEL_FORMAT),
         );
         let ldr_color_sampler = create_sampler("ldr_color_sampler", device);
         let ping_sampler = create_sampler("ping_sampler", device);
         let pong_sampler = create_sampler("pong_sampler", device);
-        self.hblur_pass.bind_group =
-            self.blur_pass_bindings.create_bind_group(
-                device,
-                self.uniform_buffer.as_entire_binding(),
-                wgpu::BindingResource::TextureView(&self.ping),
-                wgpu::BindingResource::Sampler(&ping_sampler),
-            );
+        let uniform_resource =
+            wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: &self.uniform_buffer,
+                offset: 0,
+                size: wgpu::BufferSize::new(
+                    std::mem::size_of::<PostUniformRaw>() as _,
+                ),
+            });
+        self.hblur_pass.bind_group = self.blur_pass_bindings.create_bind_group(
+            device,
+            uniform_resource.clone(),
+            wgpu::BindingResource::TextureView(&self.ping),
+            wgpu::BindingResource::Sampler(&ping_sampler),
+        );
         self.vblur_pass.bind_group = self.blur_pass_bindings.create_bind_group(
             device,
-            self.uniform_buffer.as_entire_binding(),
+            uniform_resource.clone(),
             wgpu::BindingResource::TextureView(&self.pong),
             wgpu::BindingResource::Sampler(&pong_sampler),
         );
         self.composite_pass.bind_group =
             self.composite_pass_bindings.create_bind_group(
                 device,
-                self.uniform_buffer.as_entire_binding(),
+                uniform_resource.clone(),
                 wgpu::BindingResource::TextureView(&self.ldr_color),
                 wgpu::BindingResource::Sampler(&ldr_color_sampler),
                 wgpu::BindingResource::TextureView(&self.ping),
@@ -409,12 +489,13 @@ impl Post {
         image_out: &wgpu::TextureView,
         other_bind_groups: &[&wgpu::BindGroup],
     ) {
-        for _ in 0..BLUR_STEPS {
+        for i in 0..BLUR_STEPS {
             self.render_post_pass(
                 encoder,
                 &self.hblur_pipeline,
                 &self.hblur_pass,
                 &self.pong,
+                2 * i,
                 other_bind_groups,
             );
             self.render_post_pass(
@@ -422,6 +503,7 @@ impl Post {
                 &self.vblur_pipeline,
                 &self.vblur_pass,
                 &self.ping,
+                2 * i + 1,
                 other_bind_groups,
             );
         }
@@ -430,6 +512,7 @@ impl Post {
             &self.composite_pipeline,
             &self.composite_pass,
             image_out,
+            2 * BLUR_STEPS,
             other_bind_groups,
         );
     }
@@ -440,8 +523,27 @@ impl Post {
         pipeline: &wgpu::RenderPipeline,
         pass: &PostPass,
         image_out: &wgpu::TextureView,
+        pass_number: usize,
         other_bind_groups: &[&wgpu::BindGroup],
     ) {
+        // const NEXT_LAST: usize = PASS_COUNT - 2;
+        // let load_op = match pass_number {
+        //     0 => wgpu::LoadOp::Clear(wgpu::Color {
+        //         r: 0.0,
+        //         g: 1.0,
+        //         b: 1.0,
+        //         a: 1.0,
+        //     }),
+        //     1 => wgpu::LoadOp::Clear(wgpu::Color {
+        //         r: 1.0,
+        //         g: 0.0,
+        //         b: 1.0,
+        //         a: 1.0,
+        //     }),
+        //     NEXT_LAST => wgpu::LoadOp::Clear(BLACK),
+        //     _ => wgpu::LoadOp::Load,
+        // };
+        let load_op = wgpu::LoadOp::Clear(BLACK);
         let mut render_pass =
             encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(&pass.render_pass_label),
@@ -449,12 +551,36 @@ impl Post {
                     view: image_out,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(BLACK),
+                        load: load_op,
                         store: true,
                     },
                 }],
                 depth_stencil_attachment: None,
             });
+        let mut w = 1.0 / (1 << (pass_number + 2) / 2) as f32;
+        let mut h = 1.0 / (1 << (pass_number + 1) / 2) as f32;
+        if pass_number == 2 * BLUR_STEPS as usize {
+            w = 1.0;
+            h = 1.0;
+        }
+        // println!("pass {} {}x{}", pass_number, w, h);
+        // println!(
+        //     "x {}, y {}, w {}, h {}",
+        //     0,
+        //     ((1.0 - h) * 1080.0) as u32,
+        //     (w * 1920.0) as u32,
+        //     (h * 1080.0) as u32,
+        // );
+        // XXX guessing
+        let l = (0.1 * w * self.config.width as f32) as u32;
+        let r = (0.65 * w * self.config.width as f32) as u32;
+        let t = ((1.0 - 0.95 * h) * self.config.height as f32) as u32;
+        let b = ((1.0 - 0.02 * h) * self.config.height as f32) as u32;
+        // println!("pass {}: t {}, b {}", pass_number, t, b);
+        // println!("b - t = {}", b - t);
+        if pass_number != PASS_COUNT - 1 {
+            render_pass.set_scissor_rect(l, t, r - l, b - t);
+        }
         render_pass.set_pipeline(pipeline);
         for (i, bg) in other_bind_groups.iter().enumerate() {
             render_pass.set_bind_group(i as u32, bg, &[]);
@@ -462,7 +588,10 @@ impl Post {
         render_pass.set_bind_group(
             pass.bind_group_index,
             &pass.bind_group,
-            &[],
+            &[
+                (pass_number * self.uniform_aligned_size)
+                    as wgpu::DynamicOffset,
+            ],
         );
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.draw(0..self.vertex_count, 0..1);
