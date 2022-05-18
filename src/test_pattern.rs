@@ -4,7 +4,6 @@ const FACE_COUNT: usize = 6;
 const SIDE: usize = 64;
 const CHANNEL_COUNT: usize = 4;
 const BYTES: usize = FACE_COUNT * SIDE * SIDE * CHANNEL_COUNT;
-// pub type PixelArray = [[[u8; CHANNEL_COUNT]; FACE_COUNT * SIDE]; SIDE];
 pub type PixelArray = [u8; BYTES];
 
 pub struct TestPattern {

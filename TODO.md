@@ -38,7 +38,7 @@
  * add a mirror.
  * put smudges or patina on the mirror.
  * ~~use multisampling.~~
- * add reflected glow to classic shading model.
+ * ~~add reflected glow to classic shading model.~~
 
 ## ~~Lighting Strategy~~
 

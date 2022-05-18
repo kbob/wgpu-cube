@@ -466,7 +466,7 @@ fn fetch_shadow(light_index: u32, homogeneous_coords: vec4<f32>) -> f32 {
     let proj_correction = 1.0 / homogeneous_coords.w;
     let light_local = homogeneous_coords.xy * flip_correction * proj_correction
         + vec2<f32>(0.5, 0.5);
-    
+
     // skip sampling if texture index out of bounds
     let clamped = clamp(light_local, vec2<f32>(0.0), vec2<f32>(1.0));
     if (clamped.x != light_local.x || clamped.y != light_local.y) {
@@ -881,13 +881,18 @@ var t_glow: texture_2d<f32>;
 // No base material color.  It comes from the decal texture.
 let floor_material_roughness: f32 = 0.6;
 let glow_brightness = 20000.0; // huge because distance^-2 falloff is huge
+let classic_glow_brightness = 300.0;
 
-fn floor_glow_brdf(material: Material, face: i32, N: vec3<f32>, V: vec3<f32>, world_pos: vec4<f32>) -> vec3<f32> {
+fn floor_glow_brdf(
+    material: Material,
+    face: i32,
+    N: vec3<f32>,
+    V: vec3<f32>,
+    world_pos: vec4<f32>,
+) -> vec3<f32> {
     var color = vec3<f32>(0.0);
-    let c2w = cube.cube_to_world;
-    let f2c = glow.faces_to_cube[face];
-    let c2w_rot = extract3x3(c2w);
-    let f2c_rot = extract3x3(f2c);
+    let c2w_rot = extract3x3(cube.cube_to_world);
+    let f2c_rot = extract3x3(glow.faces_to_cube[face]);
     let Nf_face = vec3<f32>(0.0, 0.0, 1.0);
     let Nf_world = c2w_rot * f2c_rot * Nf_face;
     let pos_center = Nf_world * 67.6;
@@ -905,10 +910,19 @@ fn floor_glow_brdf(material: Material, face: i32, N: vec3<f32>, V: vec3<f32>, wo
                 let L_unnorm = Lpos_world - world_pos.xyz;
                 let Ldist2 = dot(L_unnorm, L_unnorm);
                 let L = normalize(L_unnorm);
-                let Lcolor = textureLoad(t_glow, vec2<i32>((5 - face) * 4 + i, 3 - j), 0);
+                let index = vec2<i32>((5 - face) * 4 + i, 3 - j);
+                let Lcolor = textureLoad(t_glow, index, 0);
 
-                let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
-                color = color + (1.0 / Ldist2) * Lcenter_dot_Nf * dot(L, N) * Lcolor.rgb * b;
+                let b = max(
+                    vec3<f32>(0.0),
+                    disney_brdf(material, L, V, N, X, Y),
+                );
+                color = color
+                    + (1.0 / Ldist2)
+                    * Lcenter_dot_Nf
+                    * dot(L, N)
+                    * Lcolor.rgb
+                    * b;
             }
         }
     }
@@ -925,10 +939,10 @@ fn floor_color_brdf(
     let Y = normalize(cross(N, X));
 
     let material_color =
-        textureSample(t_floor_decal, s_floor_decal, tex_coord).rgb * 0.3;
+        textureSample(t_floor_decal, s_floor_decal, tex_coord).rgb;
 
     var material = material_defaults();
-    material.base_color = material_color * 3.0;
+    material.base_color = material_color;
     material.roughness = 0.6;
 
     var color = vec3<f32>(0.0);
@@ -956,6 +970,48 @@ fn floor_color_brdf(
     return vec4<f32>(color, 1.0);
 }
 
+fn floor_glow_classic(
+    material_color: vec3<f32>,
+    face: i32,
+    N: vec3<f32>,
+    V: vec3<f32>,
+    world_pos: vec4<f32>,
+) -> vec3<f32> {
+    var color = vec3<f32>(0.0);
+    let c2w_rot = extract3x3(cube.cube_to_world);
+    let f2c_rot = extract3x3(glow.faces_to_cube[face]);
+    let Nf_face = vec3<f32>(0.0, 0.0, 1.0);
+    let Nf_world = c2w_rot * f2c_rot * Nf_face;
+    let pos_center = Nf_world * 67.6;
+    let Lcenter = pos_center - world_pos.xyz;
+    let Lcenter_dot_Nf = dot(normalize(-Lcenter), Nf_world);
+    if (Lcenter_dot_Nf > 0.0) {
+        for (var i = 0; i < 4; i = i + 1) {
+            for (var j = 0; j < 4; j = j + 1) {
+                let x = f32(32 * i - 48);
+                let y = f32(32 * j - 48);
+                let Lpos_face = vec3<f32>(x, y, 67.6);
+                let Lpos_world = c2w_rot * f2c_rot * Lpos_face;
+                let L_unnorm = Lpos_world - world_pos.xyz;
+                let Ldist2 = dot(L_unnorm, L_unnorm);
+                let L = normalize(L_unnorm);
+                let H = normalize(V + L);
+                let index = vec2<i32>((5 - face) * 4 + i, 3 - j);
+                let Lcolor = textureLoad(t_glow, index, 0).rgb;
+
+                let diffuse = lambert_diffuse(Lcolor, N, L);
+                let specular = blinn_phong_specular(Lcolor, N, L, V, H);
+                color = color
+                    + (1.0 / Ldist2)
+                    * Lcenter_dot_Nf
+                    * (diffuse + specular);
+            }
+        }
+    }
+    return classic_glow_brightness * color;
+}
+
+
 fn floor_color_classic(
     tex_coord: vec2<f32>,
     N: vec3<f32>,
@@ -963,7 +1019,7 @@ fn floor_color_classic(
     world_pos: vec4<f32>,
 ) -> vec4<f32> {
     let material_color =
-        textureSample(t_floor_decal, s_floor_decal, tex_coord).rgb * 0.3;
+        textureSample(t_floor_decal, s_floor_decal, tex_coord).rgb * 0.03;
 
     var color = vec3<f32>(0.0);
 
@@ -985,6 +1041,13 @@ fn floor_color_classic(
 
         color = color + material_color * shadow * (diffuse + specular);
     }
+
+    // Glow Lights
+    for (var face = 0; face < 6; face = face + 1) {
+        color = color +
+            floor_glow_classic(material_color, face, N, V, world_pos);
+    }
+
     return vec4<f32>(color, 1.0);
 }
 
@@ -1016,6 +1079,7 @@ fn fs_floor_main(in: FloorVertexOutput) -> FloorFragmentOutput {
     //         );
     //     }
     // }
+
     if (USE_BRDF_FLAG) {
         color = floor_color_brdf(t_coord, N, V, in.world_position);
     } else {
