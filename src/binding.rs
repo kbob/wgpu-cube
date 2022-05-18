@@ -9,6 +9,7 @@ impl StaticBindings {
     const LIGHTS_UNIFORM: u32 = 2;
     const FLOOR_DECAL: u32 = 3;
     const FLOOR_DECAL_SAMPLER: u32 = 4;
+    const GLOW_UNIFORM: u32 = 5;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let layout =
@@ -68,6 +69,16 @@ impl StaticBindings {
                         ),
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: Self::GLOW_UNIFORM,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
         Self { layout }
@@ -81,6 +92,7 @@ impl StaticBindings {
         lights_uniform: wgpu::BindingResource,
         floor_decal: wgpu::BindingResource,
         floor_decal_sampler: wgpu::BindingResource,
+        glow_uniform: wgpu::BindingResource,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("static_bind_group"),
@@ -106,6 +118,10 @@ impl StaticBindings {
                     binding: Self::FLOOR_DECAL_SAMPLER,
                     resource: floor_decal_sampler,
                 },
+                wgpu::BindGroupEntry {
+                    binding: Self::GLOW_UNIFORM,
+                    resource: glow_uniform,
+                },
             ],
         })
     }
@@ -119,6 +135,7 @@ impl FrameBindings {
     pub const GROUP_INDEX: u32 = 1;
     const BLINKY_TEXTURE: u32 = 0;
     const CUBE_UNIFORM: u32 = 1;
+    const GLOW_TEXTURE: u32 = 2;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let layout =
@@ -146,6 +163,18 @@ impl FrameBindings {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: Self::GLOW_TEXTURE,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float {
+                                filterable: false,
+                            },
+                        },
+                        count: None,
+                    },
                 ],
             });
         Self { layout }
@@ -156,6 +185,7 @@ impl FrameBindings {
         device: &wgpu::Device,
         blinky_texture: wgpu::BindingResource,
         cube_uniform: wgpu::BindingResource,
+        glow_texture: wgpu::BindingResource,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("frame_bind_group"),
@@ -168,6 +198,10 @@ impl FrameBindings {
                 wgpu::BindGroupEntry {
                     binding: Self::CUBE_UNIFORM,
                     resource: cube_uniform,
+                },
+                wgpu::BindGroupEntry {
+                    binding: Self::GLOW_TEXTURE,
+                    resource: glow_texture,
                 },
             ],
         })

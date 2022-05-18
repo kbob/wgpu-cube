@@ -5,6 +5,7 @@
  * ~~Is the cube decal texture lifetime okay?~~
  * Cube spins too fast at program startup.
  * Anisotropic shading is not aligned to anything.
+ * Light bloom should be proportional to viewport size.
 
 ## Cleanup and Organization
 
@@ -20,8 +21,9 @@
  * ~~add accessor functions to generate `BindingResource`s.~~
  * maybe create a module for shaders and pipelines?
  * ~~move blinky into its own module.~~
- * only push camera and lights uniforms to GPU when they change.
+ * only push cube, camera, and lights uniforms to GPU when they change.
  * ~~use `include_wgsl!` macro instead of `include_str!`.~~
+ * have an isotropic variant BRDF since all my materials are isotropic.
 
 ## Features
 
@@ -30,10 +32,13 @@
  * ~~add lighting.~~
  * ~~add a floor.~~
  * ~~put shadows on the floor.~~
+ * ~~add HDR and light bloom.~~
+ * ~~have the floor reflect the cube's glow.~~
  * implement LED animation.
  * add a mirror.
  * put smudges or patina on the mirror.
  * ~~use multisampling.~~
+ * add reflected glow to classic shading model.
 
 ## ~~Lighting Strategy~~
 

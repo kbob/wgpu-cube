@@ -746,22 +746,6 @@ fn fs_cube_face_main(in: CubeFaceVertexOutput) -> CubeFaceFragmentOutput {
     let pix_pos = pix_coord - pix_center;
     let pix_r2: f32 = pix_pos.x * pix_pos.x + pix_pos.y * pix_pos.y;
     var color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
-    // if (pix_r2 < led_r2) {
-    //     color = led_color(tex_index);
-    // } else if (USE_BRDF_FLAG) {
-    //     color = face_color_brdf(tex_index, N, V, world_pos);
-    // } else {
-    //     color = face_color_classic(tex_index, N, V, world_pos);
-    // }
-    // let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
-    // var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
-    // if (brightness > 1.0) {
-    //     bright_color = vec4<f32>(color.rgb, 1.0);
-    // }
-    // var out: CubeFaceFragmentOutput;
-    // out.color = color;
-    // out.bright_color = bright_color;
-    // return out;
     var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
     if (pix_r2 < led_r2) {
         color = led_color(tex_index);
@@ -797,6 +781,7 @@ fn edge_color_brdf(
 
     var material = material_defaults();
     material.base_color = vec3<f32>(0.0);
+    // material.base_color = vec3<f32>(0.718, 0.055, 0.0);
     material.roughness = 0.05;
 
     var color = vec3<f32>(0.0);
@@ -879,13 +864,56 @@ fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> CubeEdgeFragmentOutput {
 
 // ----  Floor Fragment Shader   ---- ---- ---- ---- ---- ---- ---- ----
 
+struct GlowUniform {
+    faces_to_cube: array<mat4x4<f32>, 6>;
+};
+[[group(0), binding(5)]]
+var<uniform> glow: GlowUniform;
+
+
 [[group(0), binding(3)]]
 var t_floor_decal: texture_2d<f32>;
 [[group(0), binding(4)]]
 var s_floor_decal: sampler;
+[[group(1), binding(2)]]
+var t_glow: texture_2d<f32>;
 
 // No base material color.  It comes from the decal texture.
 let floor_material_roughness: f32 = 0.6;
+let glow_brightness = 20000.0; // huge because distance^-2 falloff is huge
+
+fn floor_glow_brdf(material: Material, face: i32, N: vec3<f32>, V: vec3<f32>, world_pos: vec4<f32>) -> vec3<f32> {
+    var color = vec3<f32>(0.0);
+    let c2w = cube.cube_to_world;
+    let f2c = glow.faces_to_cube[face];
+    let c2w_rot = extract3x3(c2w);
+    let f2c_rot = extract3x3(f2c);
+    let Nf_face = vec3<f32>(0.0, 0.0, 1.0);
+    let Nf_world = c2w_rot * f2c_rot * Nf_face;
+    let pos_center = Nf_world * 67.6;
+    let Lcenter = pos_center - world_pos.xyz;
+    let Lcenter_dot_Nf = dot(normalize(-Lcenter), Nf_world);
+    if (Lcenter_dot_Nf > 0.0) {
+        let X = normalize(cross(N, vec3<f32>(1.0, 0.0, 0.0))); // arbitrary
+        let Y = normalize(cross(N, X));
+        for (var i = 0; i < 4; i = i + 1) {
+            for (var j = 0; j < 4; j = j + 1) {
+                let x = f32(32 * i - 48);
+                let y = f32(32 * j - 48);
+                let Lpos_face = vec3<f32>(x, y, 67.6);
+                let Lpos_world = c2w_rot * f2c_rot * Lpos_face;
+                let L_unnorm = Lpos_world - world_pos.xyz;
+                let Ldist2 = dot(L_unnorm, L_unnorm);
+                let L = normalize(L_unnorm);
+                let Lcolor = textureLoad(t_glow, vec2<i32>((5 - face) * 4 + i, 3 - j), 0);
+
+                let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
+                color = color + (1.0 / Ldist2) * Lcenter_dot_Nf * dot(L, N) * Lcolor.rgb * b;
+            }
+        }
+    }
+    return glow_brightness * color;
+}
 
 fn floor_color_brdf(
     tex_coord: vec2<f32>,
@@ -901,7 +929,7 @@ fn floor_color_brdf(
 
     var material = material_defaults();
     material.base_color = material_color * 3.0;
-    material.roughness = 0.9;
+    material.roughness = 0.6;
 
     var color = vec3<f32>(0.0);
 
@@ -918,6 +946,13 @@ fn floor_color_brdf(
         let b = max(vec3<f32>(0.0), disney_brdf(material, L, V, N, X, Y));
         color = color + shadow * dot(L, N) * light.color.rgb * b;
     }
+    // color = vec3<f32>(0.0);
+
+    // Glow Lights
+    for (var face = 0; face < 6; face = face + 1) {
+        color = color + floor_glow_brdf(material, face, N, V, world_pos);
+    }
+
     return vec4<f32>(color, 1.0);
 }
 
@@ -966,15 +1001,31 @@ fn fs_floor_main(in: FloorVertexOutput) -> FloorFragmentOutput {
     let V = normalize(camera.view_position.xyz - in.world_position.xyz);
 
     var color: vec4<f32> = vec4<f32>(0.0);
+
+    // // uncomment to project glow texture onto corner of floor.
+    // let zx = 90.0;
+    // let zz = 40.0;
+    // if (in.world_position.x >= zx && in.world_position.x <= zx + 240.0) {
+    //     if (in.world_position.z >= zz && in.world_position.z <= zz + 40.0) {
+    //         let i = i32((in.world_position.x - zx) / 10.0);
+    //         let j = i32((in.world_position.z - zz) / 10.0);
+    //         let c = textureLoad(t_glow, vec2<i32>(i, j), 0);
+    //         return FloorFragmentOutput(
+    //             c,
+    //             vec4<f32>(0.0, 0.0, 0.0, 1.0),
+    //         );
+    //     }
+    // }
     if (USE_BRDF_FLAG) {
         color = floor_color_brdf(t_coord, N, V, in.world_position);
     } else {
         color = floor_color_classic(t_coord, N, V, in.world_position);
     }
-    // let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
     var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
-    // if (brightness > 1.0) {
-    //     bright_color = vec4<f32>(color.rgb, 1.0);
+    // // Adding light bloom to the floor reflection looks weird,
+    // // so don't do it.
+    // if (max(max(color.r, color.g), color.b) > 1.0) {
+    //     bright_color = color;
     // }
     var out: FloorFragmentOutput;
     out.color = color;

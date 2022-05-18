@@ -203,6 +203,8 @@ fn fs_composite_main(
     // let mapped_color = reinhard_simple_tone_map(hdr_color);
     // let mapped_color = reinhard_extended_tone_map(hdr_color, 2.0);
     let mapped_color = reinhard_luminance_tone_map(hdr_color, 2.0);
+
+    // // Uncomment to show HDR - LDR
     // let unbright = reinhard_luminance_tone_map(ldr_color, 2.0);
     // let mapped_color = mapped_color - unbright;
 

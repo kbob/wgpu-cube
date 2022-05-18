@@ -20,7 +20,7 @@ pub const LEFT_HAND_TO_WGPU_MATRIX: Mat4 = Mat4::new(
 );
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraUniformRaw {
     view_position: [f32; 4],
     world_to_clip: [[f32; 4]; 4],

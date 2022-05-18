@@ -15,7 +15,7 @@ pub const CUBE_BOUNDS_WORLD: cgmath::Ortho<f32> = cgmath::Ortho {
 };
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct CubeUniformRaw {
     cube_to_world: [[f32; 4]; 4],
     decal_visibility: f32,
@@ -23,7 +23,7 @@ struct CubeUniformRaw {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct FaceStaticInstanceRaw {
     face_to_cube: [[f32; 4]; 4],
     decal_offset: [f32; 2],
@@ -56,6 +56,7 @@ pub struct Cube {
     cube_uniform_buffer: wgpu::Buffer,
 
     // Face Data
+    face_xforms: Vec<Mat4>,
     face_instance_count: u32,
     face_instance_buffer: wgpu::Buffer,
     face_vertex_buffer: wgpu::Buffer,
@@ -108,10 +109,10 @@ impl Cube {
 
         // Face Initialization
 
+        let face_xforms = model.face_xforms;
         let face_instance_count = model.face_count;
         let face_instance_buffer = {
-            let data = model
-                .face_xforms
+            let data = face_xforms
                 .iter()
                 .enumerate()
                 .map(|(i, xform)| FaceStaticInstanceRaw {
@@ -175,6 +176,7 @@ impl Cube {
             cube_corners,
             cube_uniform_buffer,
 
+            face_xforms,
             face_instance_count,
             face_instance_buffer,
             face_vertex_buffer,
@@ -198,6 +200,10 @@ impl Cube {
 
     pub fn update_transform(&mut self, xform: &Mat4) {
         self.cube_to_world = *xform;
+    }
+
+    pub fn face_xforms(&self) -> &Vec<Mat4> {
+        &self.face_xforms
     }
 }
 

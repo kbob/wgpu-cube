@@ -12,6 +12,7 @@ mod camera;
 mod cube;
 mod cube_model;
 mod floor;
+mod glow;
 mod lights;
 mod post;
 mod prelude;
@@ -26,7 +27,7 @@ use traits::Renderable;
 
 const BACKFACE_CULL: bool = true;
 const ALPHA_BLENDING: bool = false;
-const SAMPLE_COUNT: u32 = 4;
+const SAMPLE_COUNT: u32 = 4; // 4 => MSAA, 1 => no MSAA
 const PRINT_FPS: bool = true;
 const DO_HDR_POSTPROCESSING: bool = true;
 pub const LDR_COLOR_PIXEL_FORMAT: wgpu::TextureFormat =
@@ -223,7 +224,8 @@ struct State {
     blinky: blinky::Blinky,             // ... Buffalo buffalo.
     cube: cube::Cube,                   // Upstate bison upstate...
     cube_trackball: trackball::Trackball,
-    floor: floor::Floor,                // ... bison baffle baffle...
+    glow: glow::Glow,                   // ... bison baffle baffle...
+    floor: floor::Floor,                // ... upstate bison.
     forward_color_format: wgpu::TextureFormat,
     cube_face_forward_pipeline: wgpu::RenderPipeline,
     cube_edge_forward_pipeline: wgpu::RenderPipeline,
@@ -306,6 +308,10 @@ impl State {
 
         let cube_trackball = trackball::Trackball::new(&size);
 
+        // Glow "object"
+
+        let glow = glow::Glow::new(&device, cube.face_xforms());
+
         // Floor object
 
         let floor = floor::Floor::new(&device, &queue);
@@ -363,11 +369,13 @@ impl State {
             lights.light_uniform_resource(),
             floor.decal_resource(),
             floor.decal_sampler_resource(),
+            glow.uniform_resource(),
         );
         let frame_bind_group = frame_bindings.create_bind_group(
             &device,
             blinky.blinky_resource(),
             cube.uniform_resource(),
+            glow.glow_view_resource(),
         );
         let forward_pass_bind_group = forward_pass_bindings.create_bind_group(
             &device,
@@ -559,6 +567,7 @@ impl State {
             blinky,
             cube,
             cube_trackball,
+            glow,
             floor,
             forward_color_format,
             cube_face_forward_pipeline,
@@ -624,6 +633,7 @@ impl State {
         let cube_to_world = self.cube_trackball.orientation(now);
         self.cube.update_transform(&cube_to_world);
         self.blinky.update();
+        self.glow.update(self.blinky.current_frame());
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -655,6 +665,7 @@ impl State {
             self.cube.prepare(&cube::CubeEdgeAttributes {});
         let floor_prepared_data =
             self.floor.prepare(&floor::FloorAttributes {});
+        let glow_prepared_data = self.glow.prepare(&glow::GlowAttributes {});
 
         // Shadow Passes
 
@@ -762,15 +773,18 @@ impl State {
 
             let bright_view: &wgpu::TextureView;
             let bright_resolve_target: Option<&wgpu::TextureView>;
+            let store: bool;
             match &self.multisampled_bright_color {
                 Some(msfb) => {
                     bright_view = &msfb;
                     bright_resolve_target =
                         Some(&self.post.bright_framebuffer());
+                    store = false;
                 }
                 None => {
                     bright_view = &self.post.bright_framebuffer();
                     bright_resolve_target = None;
+                    store = true;
                 }
             }
 
@@ -780,7 +794,7 @@ impl State {
                     resolve_target: color_resolve_target,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(BACKGROUND_COLOR),
-                        store: false,
+                        store: store,
                     },
                 },
                 wgpu::RenderPassColorAttachment {
@@ -788,7 +802,7 @@ impl State {
                     resolve_target: bright_resolve_target,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::default()),
-                        store: false,
+                        store: store,
                     },
                 },
             ];
@@ -862,6 +876,14 @@ impl State {
                 }
             }
             if true {
+                if true {
+                    // glow
+                    self.glow.render(
+                        &self.queue,
+                        &mut render_pass,
+                        &glow_prepared_data,
+                    );
+                }
                 // floor
                 render_pass.set_pipeline(&self.floor_forward_pipeline);
                 self.floor.render(

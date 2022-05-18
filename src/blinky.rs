@@ -44,6 +44,10 @@ impl Blinky {
     pub fn update(&mut self) {
         self.test_pattern.next_frame();
     }
+
+    pub fn current_frame(&self) -> &test_pattern::PixelArray {
+        self.test_pattern.current_frame()
+    }
 }
 
 pub struct BlinkyAttributes();
