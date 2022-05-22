@@ -761,11 +761,9 @@ impl State {
             match &self.multisampled_framebuffer {
                 Some(msfb) => {
                     color_view = &msfb;
-                    // color_resolve_target = Some(&view);
                     color_resolve_target = Some(output_view);
                 }
                 None => {
-                    // color_view = &view;
                     color_view = output_view;
                     color_resolve_target = None;
                 }

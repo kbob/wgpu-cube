@@ -869,7 +869,7 @@ struct GlowUniform {
 };
 [[group(0), binding(5)]]
 var<uniform> glow: GlowUniform;
-
+let glow_size: i32 = 3;
 
 [[group(0), binding(3)]]
 var t_floor_decal: texture_2d<f32>;
@@ -880,8 +880,9 @@ var t_glow: texture_2d<f32>;
 
 // No base material color.  It comes from the decal texture.
 let floor_material_roughness: f32 = 0.6;
-let glow_brightness = 20000.0; // huge because distance^-2 falloff is huge
-let classic_glow_brightness = 300.0;
+// glow_brightness is huge because distance^-2 falloff is huge.
+let glow_brightness: f32 = 320000.0;
+let classic_glow_brightness = 4800.0;
 
 fn floor_glow_brdf(
     material: Material,
@@ -901,16 +902,18 @@ fn floor_glow_brdf(
     if (Lcenter_dot_Nf > 0.0) {
         let X = normalize(cross(N, vec3<f32>(1.0, 0.0, 0.0))); // arbitrary
         let Y = normalize(cross(N, X));
-        for (var i = 0; i < 4; i = i + 1) {
-            for (var j = 0; j < 4; j = j + 1) {
-                let x = f32(32 * i - 48);
-                let y = f32(32 * j - 48);
-                let Lpos_face = vec3<f32>(x, y, 67.6);
+        for (var i = 0; i < glow_size; i = i + 1) {
+            for (var j = 0; j < glow_size; j = j + 1) {
+                let xy =
+                    128.0 * (vec2<f32>(f32(i), f32(j)) + 0.5) / f32(glow_size)
+                    - 64.0;
+                let Lpos_face = vec3<f32>(xy, 67.6);
                 let Lpos_world = c2w_rot * f2c_rot * Lpos_face;
                 let L_unnorm = Lpos_world - world_pos.xyz;
                 let Ldist2 = dot(L_unnorm, L_unnorm);
                 let L = normalize(L_unnorm);
-                let index = vec2<i32>((5 - face) * 4 + i, 3 - j);
+                let index =
+                    vec2<i32>((5 - face) * glow_size + i, glow_size - 1 - j);
                 let Lcolor = textureLoad(t_glow, index, 0);
 
                 let b = max(
@@ -926,7 +929,7 @@ fn floor_glow_brdf(
             }
         }
     }
-    return glow_brightness * color;
+    return glow_brightness * color / f32(glow_size * glow_size);
 }
 
 fn floor_color_brdf(
@@ -986,17 +989,19 @@ fn floor_glow_classic(
     let Lcenter = pos_center - world_pos.xyz;
     let Lcenter_dot_Nf = dot(normalize(-Lcenter), Nf_world);
     if (Lcenter_dot_Nf > 0.0) {
-        for (var i = 0; i < 4; i = i + 1) {
-            for (var j = 0; j < 4; j = j + 1) {
-                let x = f32(32 * i - 48);
-                let y = f32(32 * j - 48);
-                let Lpos_face = vec3<f32>(x, y, 67.6);
+        for (var i = 0; i < glow_size; i = i + 1) {
+            for (var j = 0; j < glow_size; j = j + 1) {
+                let xy =
+                    128.0 * (vec2<f32>(f32(i), f32(j)) + 0.5) / f32(glow_size)
+                    - 64.0;
+                let Lpos_face = vec3<f32>(xy, 67.6);
                 let Lpos_world = c2w_rot * f2c_rot * Lpos_face;
                 let L_unnorm = Lpos_world - world_pos.xyz;
                 let Ldist2 = dot(L_unnorm, L_unnorm);
                 let L = normalize(L_unnorm);
                 let H = normalize(V + L);
-                let index = vec2<i32>((5 - face) * 4 + i, 3 - j);
+                let index =
+                    vec2<i32>((5 - face) * glow_size + i, glow_size - 1 - j);
                 let Lcolor = textureLoad(t_glow, index, 0).rgb;
 
                 let diffuse = lambert_diffuse(Lcolor, N, L);
@@ -1008,7 +1013,7 @@ fn floor_glow_classic(
             }
         }
     }
-    return classic_glow_brightness * color;
+    return classic_glow_brightness * color / f32(glow_size * glow_size);
 }
 
 
@@ -1068,10 +1073,13 @@ fn fs_floor_main(in: FloorVertexOutput) -> FloorFragmentOutput {
     // // uncomment to project glow texture onto corner of floor.
     // let zx = 90.0;
     // let zz = 40.0;
-    // if (in.world_position.x >= zx && in.world_position.x <= zx + 240.0) {
-    //     if (in.world_position.z >= zz && in.world_position.z <= zz + 40.0) {
-    //         let i = i32((in.world_position.x - zx) / 10.0);
-    //         let j = i32((in.world_position.z - zz) / 10.0);
+    // let wx = 240.0;
+    // let hz = 40.0;
+    // let zs = hz / f32(glow_size);
+    // if (in.world_position.x >= zx && in.world_position.x <= zx + wx) {
+    //     if (in.world_position.z >= zz && in.world_position.z <= zz + hz) {
+    //         let i = i32((in.world_position.x - zx) / zs);
+    //         let j = i32((in.world_position.z - zz) / zs);
     //         let c = textureLoad(t_glow, vec2<i32>(i, j), 0);
     //         return FloorFragmentOutput(
     //             c,

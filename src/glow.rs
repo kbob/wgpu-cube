@@ -14,6 +14,14 @@ use fast_image_resize as fir;
 use std::num::NonZeroU32;
 use wgpu::util::DeviceExt;
 
+#[allow(dead_code)]
+enum ResamplingAlgorithm {
+    Lanczos, // most expensive, most accurate
+    Boxes,   // cheap and cheesy
+    Gapped,  // compromise
+}
+const RESAMPLING_ALGORITHM: ResamplingAlgorithm = ResamplingAlgorithm::Gapped;
+
 const FACE_COUNT: usize = 6;
 const CHANNEL_COUNT: usize = 4;
 
@@ -21,11 +29,32 @@ const SRC_FACE_WIDTH: usize = 64;
 const SRC_FACE_HEIGHT: usize = 64;
 const SRC_WIDTH: usize = FACE_COUNT * SRC_FACE_WIDTH;
 const SRC_HEIGHT: usize = 1 * SRC_FACE_HEIGHT;
+const SRC_BYTE_COUNT: usize = SRC_HEIGHT * SRC_WIDTH * CHANNEL_COUNT;
+const SRC_FACE_BYTE_COUNT: usize =
+    SRC_FACE_HEIGHT * SRC_FACE_WIDTH * CHANNEL_COUNT;
 
-const DST_FACE_WIDTH: usize = 4;
-const DST_FACE_HEIGHT: usize = 4;
+const INT_FACE_WIDTH: usize = 16;
+const INT_FACE_HEIGHT: usize = 16;
+const INT_WIDTH: usize = FACE_COUNT * INT_FACE_WIDTH;
+const INT_HEIGHT: usize = 1 * INT_FACE_HEIGHT;
+const INT_BYTE_COUNT: usize = INT_HEIGHT * INT_WIDTH * CHANNEL_COUNT;
+const INT_FACE_BYTE_COUNT: usize =
+    INT_FACE_HEIGHT * INT_FACE_WIDTH * CHANNEL_COUNT;
+
+const DST_FACE_WIDTH: usize = 3;
+const DST_FACE_HEIGHT: usize = 3;
 const DST_WIDTH: usize = FACE_COUNT * DST_FACE_WIDTH;
 const DST_HEIGHT: usize = 1 * DST_FACE_HEIGHT;
+const DST_BYTE_COUNT: usize = DST_HEIGHT * DST_WIDTH * CHANNEL_COUNT;
+const DST_FACE_BYTE_COUNT: usize =
+    DST_FACE_HEIGHT * DST_FACE_WIDTH * CHANNEL_COUNT;
+
+type SrcPixelArray = [u8; SRC_BYTE_COUNT];
+type IntPixelArray = [u8; INT_BYTE_COUNT];
+type DstPixelArray = [u8; DST_BYTE_COUNT];
+type SrcFacePixelArray = [u8; SRC_FACE_BYTE_COUNT];
+type IntFacePixelArray = [u8; INT_FACE_BYTE_COUNT];
+type DstFacePixelArray = [u8; DST_FACE_BYTE_COUNT];
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -37,8 +66,7 @@ pub struct Glow {
     uniform_buffer: wgpu::Buffer,
     glow_texture: wgpu::Texture,
     glow_view: wgpu::TextureView,
-    resizer: fir::Resizer,
-    data: [u8; 4 * 4 * 6 * 4],
+    resampler: Resampler,
 }
 
 impl Glow {
@@ -61,8 +89,8 @@ impl Glow {
         let glow_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("glow_texture"),
             size: wgpu::Extent3d {
-                width: 24,
-                height: 4,
+                width: DST_WIDTH as _,
+                height: DST_HEIGHT as _,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -78,18 +106,25 @@ impl Glow {
                 label: Some("glow_texture_view"),
                 ..Default::default()
             });
-        let resizer = fir::Resizer::new(fir::ResizeAlg::Convolution(
-            fir::FilterType::Lanczos3,
-        ));
 
-        let data = [0u8; 4 * 6 * 4 * 4];
+        let resampler = {
+            let algorithm = RESAMPLING_ALGORITHM;
+            let resizer = fir::Resizer::new(fir::ResizeAlg::Convolution(
+                fir::FilterType::Lanczos3,
+            ));
+            let data = [0u8; DST_BYTE_COUNT];
+            Resampler {
+                algorithm,
+                resizer,
+                data,
+            }
+        };
 
         Self {
             uniform_buffer,
             glow_texture,
             glow_view,
-            resizer,
-            data,
+            resampler,
         }
     }
 
@@ -101,52 +136,8 @@ impl Glow {
         wgpu::BindingResource::TextureView(&self.glow_view)
     }
 
-    pub fn update(&mut self, blinky: &[u8; 6 * 64 * 64 * 4]) {
-        // Do the image resampling thing here.
-        let mut src_bytes = blinky.clone();
-        let src_image = fir::Image::from_slice_u8(
-            NonZeroU32::new(SRC_WIDTH as _).unwrap(),
-            NonZeroU32::new(SRC_HEIGHT as _).unwrap(),
-            &mut src_bytes,
-            fir::PixelType::U8x4,
-        )
-        .unwrap();
-        let mut src_view = src_image.view();
-        for face in 0..FACE_COUNT {
-            src_view
-                .set_crop_box(fir::CropBox {
-                    left: (face * SRC_FACE_WIDTH) as u32,
-                    top: 0,
-                    width: NonZeroU32::new(SRC_FACE_WIDTH as _).unwrap(),
-                    height: NonZeroU32::new(SRC_FACE_HEIGHT as _).unwrap(),
-                })
-                .unwrap();
-            let mut dst_face_image = fir::Image::new(
-                NonZeroU32::new(DST_FACE_WIDTH as _).unwrap(),
-                NonZeroU32::new(DST_FACE_HEIGHT as _).unwrap(),
-                fir::PixelType::U8x4,
-            );
-            let mut dst_view = dst_face_image.view_mut();
-
-            self.resizer.resize(&src_view, &mut dst_view).unwrap();
-
-            let face_bytes = dst_face_image.buffer();
-
-            self.copy_face(face, face_bytes);
-        }
-    }
-
-    fn copy_face(&mut self, face: usize, bytes: &[u8]) {
-        let face_offset = face * DST_FACE_WIDTH * CHANNEL_COUNT;
-        for row in 0..DST_HEIGHT {
-            let face_row_bytes = DST_FACE_WIDTH * CHANNEL_COUNT;
-            let src_row_offset = row * face_row_bytes;
-            let dst_row_offset = face_offset + row * DST_WIDTH * CHANNEL_COUNT;
-            self.data[dst_row_offset..dst_row_offset + face_row_bytes]
-                .copy_from_slice(
-                    &bytes[src_row_offset..src_row_offset + face_row_bytes],
-                );
-        }
+    pub fn update(&mut self, blinky: &SrcPixelArray) {
+        self.resampler.resample(blinky);
     }
 }
 
@@ -166,17 +157,234 @@ impl Renderable<GlowAttributes, GlowPreparedData> for Glow {
     ) {
         queue.write_texture(
             self.glow_texture.as_image_copy(),
-            &self.data,
+            &self.resampler.data,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: std::num::NonZeroU32::new(6 * 4 * 4),
+                bytes_per_row: std::num::NonZeroU32::new(
+                    (DST_WIDTH * CHANNEL_COUNT) as _,
+                ),
                 rows_per_image: None,
             },
             wgpu::Extent3d {
-                width: 6 * 4,
-                height: 4,
+                width: DST_WIDTH as _,
+                height: DST_HEIGHT as _,
                 depth_or_array_layers: 1,
             },
         );
+    }
+}
+
+struct Resampler {
+    algorithm: ResamplingAlgorithm,
+    resizer: fir::Resizer,
+    data: DstPixelArray,
+}
+
+impl Resampler {
+    fn resample(&mut self, blinky: &SrcPixelArray) {
+        match self.algorithm {
+            ResamplingAlgorithm::Lanczos => self.resample_lanczos(blinky),
+            ResamplingAlgorithm::Boxes => self.resample_boxes(blinky),
+            ResamplingAlgorithm::Gapped => self.resample_gapped(blinky),
+        };
+    }
+
+    fn resample_lanczos(&mut self, blinky: &SrcPixelArray) {
+        for face in 0..FACE_COUNT {
+            let mut src_face_bytes = blinky.get_face(face);
+            let src_image = fir::Image::from_slice_u8(
+                NonZeroU32::new(SRC_FACE_WIDTH as _).unwrap(),
+                NonZeroU32::new(SRC_FACE_HEIGHT as _).unwrap(),
+                &mut src_face_bytes,
+                fir::PixelType::U8x4,
+            )
+            .unwrap();
+            let src_view = src_image.view();
+            let mut dst_face_image = fir::Image::new(
+                NonZeroU32::new(DST_FACE_WIDTH as _).unwrap(),
+                NonZeroU32::new(DST_FACE_HEIGHT as _).unwrap(),
+                fir::PixelType::U8x4,
+            );
+            let mut dst_view = dst_face_image.view_mut();
+
+            self.resizer.resize(&src_view, &mut dst_view).unwrap();
+
+            let face_bytes = dst_face_image.buffer();
+            self.data.set_face(face, face_bytes.try_into().unwrap());
+        }
+    }
+
+    fn resample_boxes(&mut self, blinky: &SrcPixelArray) {
+        const SCALE: usize = SRC_WIDTH / DST_WIDTH;
+        assert!(SCALE * DST_WIDTH == SRC_WIDTH);
+        const SRC_COL_BYTES: usize = CHANNEL_COUNT;
+        const SRC_ROW_BYTES: usize = SRC_WIDTH * SRC_COL_BYTES;
+        const DST_COL_BYTES: usize = CHANNEL_COUNT;
+        const DST_ROW_BYTES: usize = DST_WIDTH * DST_COL_BYTES;
+        for row in 0..DST_HEIGHT {
+            let row_offset = SRC_ROW_BYTES * SCALE * row;
+            for col in 0..DST_WIDTH {
+                let row_col_offset = row_offset + SCALE * CHANNEL_COUNT * col;
+                let mut accum = [0usize; 3];
+                for i in 0..SCALE {
+                    let i_offset = row_col_offset + i * SRC_ROW_BYTES;
+                    for j in 0..SCALE {
+                        accum[0] +=
+                            blinky[i_offset + j * CHANNEL_COUNT + 0] as usize;
+                        accum[1] +=
+                            blinky[i_offset + j * CHANNEL_COUNT + 1] as usize;
+                        accum[2] +=
+                            blinky[i_offset + j * CHANNEL_COUNT + 2] as usize;
+                    }
+                }
+                let s2 = SCALE * SCALE;
+                self.data[row * DST_ROW_BYTES + col * DST_COL_BYTES + 0] =
+                    (accum[0] / s2) as u8;
+                self.data[row * DST_ROW_BYTES + col * DST_COL_BYTES + 1] =
+                    (accum[1] / s2) as u8;
+                self.data[row * DST_ROW_BYTES + col * DST_COL_BYTES + 2] =
+                    (accum[2] / s2) as u8;
+                self.data[row * DST_ROW_BYTES + col * DST_COL_BYTES + 3] = 255;
+            }
+        }
+    }
+
+    fn resample_gapped(&mut self, blinky: &SrcPixelArray) {
+        // box-convert down to 16x16 (factor of 4x4).
+        let int_bytes = self.resample_boxes_intermediate(blinky);
+
+        // lanczos-convert down to 4x4 (factor of 4x4).
+        self.resample_intermediate_lanczos(&int_bytes);
+    }
+
+    fn resample_boxes_intermediate(
+        &mut self,
+        blinky: &SrcPixelArray,
+    ) -> IntPixelArray {
+        const SCALE: usize = SRC_WIDTH / INT_WIDTH;
+        assert!(SCALE * INT_WIDTH == SRC_WIDTH);
+        const SRC_COL_BYTES: usize = CHANNEL_COUNT;
+        const SRC_ROW_BYTES: usize = SRC_WIDTH * SRC_COL_BYTES;
+        const INT_COL_BYTES: usize = CHANNEL_COUNT;
+        const INT_ROW_BYTES: usize = INT_WIDTH * INT_COL_BYTES;
+        let mut int_bytes = [0u8; INT_BYTE_COUNT];
+        for row in 0..INT_HEIGHT {
+            let row_offset = SRC_ROW_BYTES * SCALE * row;
+            for col in 0..INT_WIDTH {
+                let row_col_offset = row_offset + SCALE * CHANNEL_COUNT * col;
+                let mut accum = [0usize; 3];
+                for i in 0..SCALE {
+                    let i_offset = row_col_offset + i * SRC_ROW_BYTES;
+                    for j in 0..SCALE {
+                        accum[0] +=
+                            blinky[i_offset + j * CHANNEL_COUNT + 0] as usize;
+                        accum[1] +=
+                            blinky[i_offset + j * CHANNEL_COUNT + 1] as usize;
+                        accum[2] +=
+                            blinky[i_offset + j * CHANNEL_COUNT + 2] as usize;
+                    }
+                }
+                let s2 = SCALE * SCALE;
+                int_bytes[row * INT_ROW_BYTES + col * INT_COL_BYTES + 0] =
+                    (accum[0] / s2) as u8;
+                int_bytes[row * INT_ROW_BYTES + col * INT_COL_BYTES + 1] =
+                    (accum[1] / s2) as u8;
+                int_bytes[row * INT_ROW_BYTES + col * INT_COL_BYTES + 2] =
+                    (accum[2] / s2) as u8;
+                int_bytes[row * INT_ROW_BYTES + col * INT_COL_BYTES + 3] = 255;
+            }
+        }
+        int_bytes
+    }
+
+    fn resample_intermediate_lanczos(&mut self, int_bytes: &IntPixelArray) {
+        for face in 0..FACE_COUNT {
+            let mut int_face_bytes = int_bytes.get_face(face);
+            let int_image = fir::Image::from_slice_u8(
+                NonZeroU32::new(INT_FACE_WIDTH as _).unwrap(),
+                NonZeroU32::new(INT_FACE_HEIGHT as _).unwrap(),
+                &mut int_face_bytes,
+                fir::PixelType::U8x4,
+            )
+            .unwrap();
+            let int_view = int_image.view();
+            let mut dst_face_image = fir::Image::new(
+                NonZeroU32::new(DST_FACE_WIDTH as _).unwrap(),
+                NonZeroU32::new(DST_FACE_HEIGHT as _).unwrap(),
+                fir::PixelType::U8x4,
+            );
+            let mut dst_view = dst_face_image.view_mut();
+
+            self.resizer.resize(&int_view, &mut dst_view).unwrap();
+
+            let face_bytes = dst_face_image.buffer();
+            self.data.set_face(face, face_bytes.try_into().unwrap());
+        }
+    }
+}
+
+trait FaceSource<T> {
+    fn get_face(&self, face: usize) -> T;
+}
+
+impl FaceSource<SrcFacePixelArray> for SrcPixelArray {
+    fn get_face(&self, face: usize) -> SrcFacePixelArray {
+        let mut data: SrcFacePixelArray = [0u8; SRC_FACE_BYTE_COUNT];
+        let face_offset = face * SRC_FACE_WIDTH * CHANNEL_COUNT;
+        for row in 0..SRC_FACE_HEIGHT {
+            let row_offset = row * SRC_WIDTH * CHANNEL_COUNT;
+            let face_row_offset = row * SRC_FACE_WIDTH * CHANNEL_COUNT;
+            for col in 0..SRC_FACE_WIDTH {
+                let col_offset = col * CHANNEL_COUNT;
+                for chan in 0..CHANNEL_COUNT {
+                    let i = face_offset + row_offset + col_offset + chan;
+                    let j = face_row_offset + col_offset + chan;
+                    data[j] = self[i];
+                }
+            }
+        }
+        data
+    }
+}
+
+impl FaceSource<IntFacePixelArray> for IntPixelArray {
+    fn get_face(&self, face: usize) -> IntFacePixelArray {
+        let mut data: IntFacePixelArray = [0u8; INT_FACE_BYTE_COUNT];
+        let face_offset = face * INT_FACE_WIDTH * CHANNEL_COUNT;
+        for row in 0..INT_FACE_HEIGHT {
+            let row_offset = row * INT_WIDTH * CHANNEL_COUNT;
+            let face_row_offset = row * INT_FACE_WIDTH * CHANNEL_COUNT;
+            for col in 0..INT_FACE_WIDTH {
+                let col_offset = col * CHANNEL_COUNT;
+                for chan in 0..CHANNEL_COUNT {
+                    let i = face_offset + row_offset + col_offset + chan;
+                    let j = face_row_offset + col_offset + chan;
+                    data[j] = self[i];
+                }
+            }
+        }
+        data
+    }
+}
+
+trait FaceDestination<T> {
+    fn set_face(&mut self, face: usize, other: &T);
+}
+
+impl FaceDestination<DstFacePixelArray> for DstPixelArray {
+    fn set_face(&mut self, face: usize, other: &DstFacePixelArray) {
+        let face_offset = face * DST_FACE_WIDTH * CHANNEL_COUNT;
+        for row in 0..DST_FACE_HEIGHT {
+            let row_offset = row * DST_WIDTH * CHANNEL_COUNT;
+            let face_row_offset = row * DST_FACE_WIDTH * CHANNEL_COUNT;
+            for col in 0..DST_FACE_WIDTH {
+                let col_offset = col * CHANNEL_COUNT;
+                for chan in 0..CHANNEL_COUNT {
+                    let i = face_offset + row_offset + col_offset + chan;
+                    let j = face_row_offset + col_offset + chan;
+                    self[i] = other[j];
+                }
+            }
+        }
     }
 }
