@@ -5,6 +5,7 @@
 struct CameraUniform {
     view_position: vec4<f32>;
     world_to_clip: mat4x4<f32>;
+    framebuffer_to_texture: vec2<f32>;
 };
 [[group(0), binding(1)]]
 var<uniform> camera: CameraUniform;
@@ -41,6 +42,7 @@ let TAU: f32 = 6.283185307179586;
 let PI: f32 = 3.141592653589793;
 
 let USE_BRDF_FLAG: bool = true;
+let PRECOMPUTE_GLOW_FLAG: bool = true;
 
 // ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ====
 // ====  Vertex Shaders
@@ -186,6 +188,8 @@ struct FloorVertexOutput {
     [[location(2), interpolate(perspective, sample)]] decal_coords: vec2<f32>;
 };
 
+// N.B., vs_floor_main is used both for floor in forward pass
+// and for prefloor pass.
 [[stage(vertex)]]
 fn vs_floor_main(
     model: FloorVertexInput,
@@ -869,7 +873,7 @@ struct GlowUniform {
 };
 [[group(0), binding(5)]]
 var<uniform> glow: GlowUniform;
-let glow_size: i32 = 3;
+let glow_size: i32 = 5;
 
 [[group(0), binding(3)]]
 var t_floor_decal: texture_2d<f32>;
@@ -877,6 +881,10 @@ var t_floor_decal: texture_2d<f32>;
 var s_floor_decal: sampler;
 [[group(1), binding(2)]]
 var t_glow: texture_2d<f32>;
+[[group(2), binding(3)]]
+var t_pre_glow: texture_2d<f32>;
+[[group(2), binding(4)]]
+var s_pre_glow: sampler;
 
 // No base material color.  It comes from the decal texture.
 let floor_material_roughness: f32 = 0.6;
@@ -932,8 +940,16 @@ fn floor_glow_brdf(
     return glow_brightness * color / f32(glow_size * glow_size);
 }
 
+fn floor_material(base_color: vec3<f32>) -> Material {
+    var material = material_defaults();
+    material.base_color = base_color;
+    material.roughness = 0.4;
+    return material;
+}
+
 fn floor_color_brdf(
     tex_coord: vec2<f32>,
+    image_coords: vec2<f32>,
     N: vec3<f32>,
     V: vec3<f32>,
     world_pos: vec4<f32>,
@@ -943,10 +959,7 @@ fn floor_color_brdf(
 
     let material_color =
         textureSample(t_floor_decal, s_floor_decal, tex_coord).rgb;
-
-    var material = material_defaults();
-    material.base_color = material_color;
-    material.roughness = 0.6;
+    let material = floor_material(material_color);
 
     var color = vec3<f32>(0.0);
 
@@ -966,9 +979,15 @@ fn floor_color_brdf(
     // color = vec3<f32>(0.0);
 
     // Glow Lights
-    for (var face = 0; face < 6; face = face + 1) {
-        color = color + floor_glow_brdf(material, face, N, V, world_pos);
-    }
+    if (PRECOMPUTE_GLOW_FLAG) {
+        var glow_color =
+            textureSample(t_pre_glow, s_pre_glow, image_coords).xyz;
+        color = color + glow_color * 0.03;
+    } else {
+        for (var face = 0; face < 6; face = face + 1) {
+            color = color + floor_glow_brdf(material, face, N, V, world_pos);
+        }
+    }    
 
     return vec4<f32>(color, 1.0);
 }
@@ -1016,9 +1035,9 @@ fn floor_glow_classic(
     return classic_glow_brightness * color / f32(glow_size * glow_size);
 }
 
-
 fn floor_color_classic(
     tex_coord: vec2<f32>,
+    image_coords: vec2<f32>,
     N: vec3<f32>,
     V: vec3<f32>,
     world_pos: vec4<f32>,
@@ -1048,9 +1067,15 @@ fn floor_color_classic(
     }
 
     // Glow Lights
-    for (var face = 0; face < 6; face = face + 1) {
-        color = color +
-            floor_glow_classic(material_color, face, N, V, world_pos);
+    if (PRECOMPUTE_GLOW_FLAG) {
+        var glow_color =
+            textureSample(t_pre_glow, s_pre_glow, image_coords).xyz;
+        color = color + glow_color * 0.3;
+    } else {
+        for (var face = 0; face < 6; face = face + 1) {
+            color = color +
+                floor_glow_classic(material_color, face, N, V, world_pos);
+        }
     }
 
     return vec4<f32>(color, 1.0);
@@ -1062,13 +1087,41 @@ struct FloorFragmentOutput {
 };
 
 [[stage(fragment)]]
+fn fs_prefloor_main(in: FloorVertexOutput) -> [[location(0)]] vec4<f32> {
+    let N = normalize(in.world_normal);
+    let V = normalize(camera.view_position.xyz - in.world_position.xyz);
+    let world_pos = in.world_position;
+
+    let base_color = vec3<f32>(1.0);
+    let material = floor_material(base_color);
+
+    var color = vec3<f32>(0.0);
+
+    if (USE_BRDF_FLAG) {
+        for (var face = 0; face < 6; face = face + 1) {
+            color = color +
+                floor_glow_brdf(material, face, N, V, world_pos);
+        }
+    } else {
+        for (var face = 0; face < 6; face = face + 1) {
+            let material_color = material.base_color * 0.03;
+            color = color +
+                floor_glow_classic(material_color, face, N, V, world_pos);
+        }
+    }
+
+    return vec4<f32>(color, 1.0);
+}
+
+[[stage(fragment)]]
 fn fs_floor_main(in: FloorVertexOutput) -> FloorFragmentOutput {
     let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
+    let image_coords = in.clip_position.xy * camera.framebuffer_to_texture;
 
     let N = normalize(in.world_normal);
     let V = normalize(camera.view_position.xyz - in.world_position.xyz);
 
-    var color: vec4<f32> = vec4<f32>(0.0);
+    var color = vec4<f32>(0.0);
 
     // // uncomment to project glow texture onto corner of floor.
     // let zx = 90.0;
@@ -1088,12 +1141,35 @@ fn fs_floor_main(in: FloorVertexOutput) -> FloorFragmentOutput {
     //     }
     // }
 
+    // // uncomment to project prefloor texture onto corner of floor.
+    // let zx = 170.0;
+    // let zz = 15.0;
+    // let wx = 80.0 * 1920.0 / 1080.0;
+    // let hz = 80.0;
+    // let xs = wx;
+    // let zs = hz;
+    // let u = f32((in.world_position.x - zx) / xs);
+    // let v = f32((in.world_position.z - zz) / zs);
+    // let uv = vec2<f32>(u, v);
+    // let c = textureSample(t_pre_glow, s_pre_glow, uv);
+    // if (in.world_position.x >= zx && in.world_position.x <= zx + wx) {
+    //     if (in.world_position.z >= zz && in.world_position.z <= zz + hz) {
+    //         return FloorFragmentOutput(
+    //             c,
+    //             vec4<f32>(0.0, 0.0, 0.0, 1.0),
+    //         );
+    //     }
+    // }
+
     if (USE_BRDF_FLAG) {
-        color = floor_color_brdf(t_coord, N, V, in.world_position);
+        color =
+            floor_color_brdf(t_coord, image_coords, N, V, in.world_position);
     } else {
-        color = floor_color_classic(t_coord, N, V, in.world_position);
+        color =
+            floor_color_classic(t_coord, image_coords, N, V, in.world_position);
     }
     var bright_color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+
     // // Adding light bloom to the floor reflection looks weird,
     // // so don't do it.
     // if (max(max(color.r, color.g), color.b) > 1.0) {

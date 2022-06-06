@@ -15,7 +15,9 @@ mod floor;
 mod glow;
 mod lights;
 mod post;
+mod prefloor;
 mod prelude;
+// mod splitter;
 mod test_pattern;
 mod texture;
 mod trackball;
@@ -60,12 +62,10 @@ fn create_forward_render_pipeline(
     color_format: wgpu::TextureFormat,
     depth_format: Option<wgpu::TextureFormat>,
     vertex_layouts: &[wgpu::VertexBufferLayout],
-    shader: &wgpu::ShaderModuleDescriptor,
+    shader: &wgpu::ShaderModule,
     vertex_entry: &str,
     fragment_entry: &str,
 ) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(shader);
-
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(label),
         layout: Some(layout),
@@ -129,11 +129,9 @@ fn create_shadow_render_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
     vertex_layouts: &[wgpu::VertexBufferLayout],
-    shader: &wgpu::ShaderModuleDescriptor,
+    shader: &wgpu::ShaderModule,
     vertex_entry: &str,
 ) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(shader);
-
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(label),
         layout: Some(layout),
@@ -225,6 +223,7 @@ struct State {
     cube: cube::Cube,                   // Upstate bison upstate...
     cube_trackball: trackball::Trackball,
     glow: glow::Glow,                   // ... bison baffle baffle...
+    prefloor: prefloor::PreFloor,       // ...
     floor: floor::Floor,                // ... upstate bison.
     forward_color_format: wgpu::TextureFormat,
     cube_face_forward_pipeline: wgpu::RenderPipeline,
@@ -259,17 +258,12 @@ impl State {
             .await
             .unwrap();
 
-        // ensure textures big enough for full screen MSAA.
-        let device_limits = wgpu::Limits {
-            ..wgpu::Limits::default().using_resolution(adapter.limits())
-        };
-
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("device"),
                     features: wgpu::Features::empty(),
-                    limits: device_limits,
+                    limits: wgpu::Limits::default(),
                 },
                 None,
             )
@@ -285,12 +279,28 @@ impl State {
         };
         surface.configure(&device, &config);
 
+        // Bindings
+
+        let static_bindings = binding::StaticBindings::new(&device);
+        let frame_bindings = binding::FrameBindings::new(&device);
+        let forward_pass_bindings = binding::ForwardPassBindings::new(&device);
+        let shadow_pass_bindings = binding::ShadowPassBindings::new(&device);
+
+        // Shader(s)
+
+        let common_shader = {
+            let descriptor = wgpu::include_wgsl!("common_shader.wgsl");
+            device.create_shader_module(&descriptor)
+        };
+
         // Camera
 
         let camera = camera::Camera::new(
             &device,
-            size.width,
-            size.height,
+            &camera::Configuration {
+                width: size.width,
+                height: size.height,
+            },
             WORLD_HANDEDNESS,
         );
 
@@ -301,6 +311,17 @@ impl State {
         // Blinky
 
         let blinky = blinky::Blinky::new(&device);
+
+        let prefloor = prefloor::PreFloor::new(
+            &device,
+            &prefloor::Configuration {
+                width: config.width,
+                height: config.height,
+            },
+            &common_shader,
+            &static_bindings.layout,
+            &frame_bindings.layout,
+        );
 
         // Cube Object
 
@@ -358,10 +379,6 @@ impl State {
             "multisampled_bright_color",
         );
 
-        let static_bindings = binding::StaticBindings::new(&device);
-        let frame_bindings = binding::FrameBindings::new(&device);
-        let forward_pass_bindings = binding::ForwardPassBindings::new(&device);
-        let shadow_pass_bindings = binding::ShadowPassBindings::new(&device);
         let static_bind_group = static_bindings.create_bind_group(
             &device,
             cube.face_decal_resource(),
@@ -381,13 +398,13 @@ impl State {
             &device,
             lights.shadow_maps_resource(),
             lights.shadow_maps_sampler_resource(),
+            prefloor.glow_view_resource(),
+            prefloor.glow_sampler_resource(),
         );
         let shadow_pass_bind_group = shadow_pass_bindings
             .create_bind_group(&device, lights.shadow_uniform_resource());
 
-        // Shader(s)
-
-        let common_shader = wgpu::include_wgsl!("common_shader.wgsl");
+        // Pipelines
 
         let cube_face_forward_pipeline = {
             let layout = device.create_pipeline_layout(
@@ -568,6 +585,7 @@ impl State {
             cube,
             cube_trackball,
             glow,
+            prefloor,
             floor,
             forward_color_format,
             cube_face_forward_pipeline,
@@ -591,8 +609,10 @@ impl State {
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
-            self.camera
-                .set_aspect(self.config.width, self.config.height);
+            self.camera.resize(&camera::Configuration {
+                width: self.config.width,
+                height: self.config.height,
+            });
             self.depth_texture = texture::Texture::create_depth_texture(
                 "depth_texture",
                 &self.device,
@@ -617,6 +637,12 @@ impl State {
                 BRIGHT_COLOR_PIXEL_FORMAT,
                 "multisampled_bright_color (resize)",
             );
+            // self.prefloor.resize(
+            //     &self.device, 
+            //     &prefloor::Configuration {
+            //     width: new_size.width,
+            //     height: new_size.height,
+            // });
             self.post
                 .resize(&self.device, new_size.width, new_size.height);
             self.cube_trackball.set_viewport_size(&new_size);
@@ -634,6 +660,7 @@ impl State {
         self.cube.update_transform(&cube_to_world);
         self.blinky.update();
         self.glow.update(self.blinky.current_frame());
+        self.prefloor.update();
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -666,6 +693,17 @@ impl State {
         let floor_prepared_data =
             self.floor.prepare(&floor::FloorAttributes {});
         let glow_prepared_data = self.glow.prepare(&glow::GlowAttributes {});
+
+        // Prefloor (low resolution glow) pass.
+        // The `render` method creates its own render pass.
+        self.prefloor.render(
+            &mut encoder,
+            &[
+                &self.static_bind_group,
+                &self.frame_bind_group,
+            ],
+            self.floor.vertex_slice(),
+        );
 
         // Shadow Passes
 

@@ -175,16 +175,16 @@ impl Lights {
     pub fn new(device: &wgpu::Device) -> Self {
         let lights = vec![
             Light::Ambient {
-                intensity: 0.05,
+                intensity: 0.0,
                 color: Vec3::new(1.0, 1.0, 1.0),
             },
             Light::Directional {
-                intensity: 1.0,
+                intensity: 0.6,
                 color: Vec3::new(1.0, 0.7, 0.5),
                 direction: Vec3::new(-1.0, 1.0, 1.0),
             },
             Light::Directional {
-                intensity: 1.0,
+                intensity: 0.6,
                 color: Vec3::new(1.0, 0.9, 1.0),
                 direction: Vec3::new(-1.0, 1.0, -0.2),
             },

@@ -214,7 +214,7 @@ pub struct ShadowPassBindings {
 
 impl ShadowPassBindings {
     pub const GROUP_INDEX: u32 = 2;
-    pub const SHADOW_UNIFORM: u32 = 0;
+    const SHADOW_UNIFORM: u32 = 0;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let layout =
@@ -256,8 +256,10 @@ pub struct ForwardPassBindings {
 
 impl ForwardPassBindings {
     pub const GROUP_INDEX: u32 = 2;
-    pub const SHADOW_MAPS: u32 = 0;
-    pub const SHADOW_MAPS_SAMPLER: u32 = 1;
+    const SHADOW_MAPS: u32 = 0;
+    const SHADOW_MAPS_SAMPLER: u32 = 1;
+    const PRE_GLOW_TEXTURE: u32 = 3;
+    const PRE_GLOW_SAMPLER: u32 = 4;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let layout =
@@ -282,6 +284,26 @@ impl ForwardPassBindings {
                         ),
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: Self::PRE_GLOW_TEXTURE,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float {
+                                filterable: true,
+                            },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: Self::PRE_GLOW_SAMPLER,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(
+                            wgpu::SamplerBindingType::Filtering,
+                        ),
+                        count: None,
+                    },
                 ],
             });
         Self { layout }
@@ -292,6 +314,8 @@ impl ForwardPassBindings {
         device: &wgpu::Device,
         shadow_maps: wgpu::BindingResource,
         shadow_maps_sampler: wgpu::BindingResource,
+        pre_glow_texture: wgpu::BindingResource,
+        pre_glow_sampler: wgpu::BindingResource,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("forward_pass_bind_group"),
@@ -305,6 +329,14 @@ impl ForwardPassBindings {
                     binding: Self::SHADOW_MAPS_SAMPLER,
                     resource: shadow_maps_sampler,
                 },
+                wgpu::BindGroupEntry {
+                    binding: Self::PRE_GLOW_TEXTURE,
+                    resource: pre_glow_texture,
+                },
+                wgpu::BindGroupEntry {
+                    binding: Self::PRE_GLOW_SAMPLER,
+                    resource: pre_glow_sampler,
+                },
             ],
         })
     }
@@ -316,9 +348,9 @@ pub struct BlurPassBindings {
 
 impl BlurPassBindings {
     pub const GROUP_INDEX: u32 = 2;
-    pub const POST_UNIFORM: u32 = 0;
-    pub const IMAGE_TEXTURE: u32 = 1;
-    pub const IMAGE_SAMPLER: u32 = 2;
+    const POST_UNIFORM: u32 = 0;
+    const IMAGE_TEXTURE: u32 = 1;
+    const IMAGE_SAMPLER: u32 = 2;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let layout =
@@ -396,11 +428,11 @@ pub struct CompositePassBindings {
 
 impl CompositePassBindings {
     pub const GROUP_INDEX: u32 = 2;
-    pub const POST_UNIFORM: u32 = 0;
-    pub const COLOR_TEXTURE: u32 = 1;
-    pub const COLOR_SAMPLER: u32 = 2;
-    pub const BRIGHT_TEXTURE: u32 = 3;
-    pub const BRIGHT_SAMPLER: u32 = 4;
+    const POST_UNIFORM: u32 = 0;
+    const COLOR_TEXTURE: u32 = 1;
+    const COLOR_SAMPLER: u32 = 2;
+    const BRIGHT_TEXTURE: u32 = 3;
+    const BRIGHT_SAMPLER: u32 = 4;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let layout =

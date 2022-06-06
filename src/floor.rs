@@ -5,6 +5,7 @@ use wgpu::util::DeviceExt;
 const FLOOR_HEIGHT: f32 = -120.0;
 const FLOOR_WIDTH: f32 = 750.0;
 const FLOOR_LENGTH: f32 = 750.0;
+
 pub const FLOOR_BOUNDS_WORLD: cgmath::Ortho<f32> = cgmath::Ortho {
     left: 60.0 - FLOOR_WIDTH / 2.0,
     right: 60.0 + FLOOR_WIDTH / 2.0,
@@ -77,6 +78,10 @@ impl Floor {
 
     pub fn decal_sampler_resource(&self) -> wgpu::BindingResource {
         wgpu::BindingResource::Sampler(&self.decal.sampler)
+    }
+
+    pub fn vertex_slice(&self) -> wgpu::BufferSlice {
+        self.vertex_buffer.slice(..)
     }
 
     fn create_vertex_data() -> Vec<FloorVertexRaw> {

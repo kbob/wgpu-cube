@@ -41,8 +41,8 @@ const INT_BYTE_COUNT: usize = INT_HEIGHT * INT_WIDTH * CHANNEL_COUNT;
 const INT_FACE_BYTE_COUNT: usize =
     INT_FACE_HEIGHT * INT_FACE_WIDTH * CHANNEL_COUNT;
 
-const DST_FACE_WIDTH: usize = 3;
-const DST_FACE_HEIGHT: usize = 3;
+const DST_FACE_WIDTH: usize = 5;
+const DST_FACE_HEIGHT: usize = 5;
 const DST_WIDTH: usize = FACE_COUNT * DST_FACE_WIDTH;
 const DST_HEIGHT: usize = 1 * DST_FACE_HEIGHT;
 const DST_BYTE_COUNT: usize = DST_HEIGHT * DST_WIDTH * CHANNEL_COUNT;
@@ -51,7 +51,7 @@ const DST_FACE_BYTE_COUNT: usize =
 
 type SrcPixelArray = [u8; SRC_BYTE_COUNT];
 type IntPixelArray = [u8; INT_BYTE_COUNT];
-type DstPixelArray = [u8; DST_BYTE_COUNT];
+pub type DstPixelArray = [u8; DST_BYTE_COUNT];
 type SrcFacePixelArray = [u8; SRC_FACE_BYTE_COUNT];
 type IntFacePixelArray = [u8; INT_FACE_BYTE_COUNT];
 type DstFacePixelArray = [u8; DST_FACE_BYTE_COUNT];

@@ -49,22 +49,22 @@ fn fs_horizontal_blur_main(
     let image_coord = in.coord;
     let image_size = vec2<f32>(textureDimensions(t_image));
 
-//     // // wgsl doesn't allow indexing an array with a variable???
-//     // let off = vec2<f32>(offsets[0], 0.0) / image_size;
-//     // let wgt = weights[0];
-//     // let coord = image_coord - off;
-//     // let samp = textureSample(t_image, s_image, coord).rgb;
-//     // var color = wgt * samp;
-//     // for (var i = 1; i < 3; i = i + 1) {
-//     //     let off = vec2<f32>(offsets[i], 0.0) / image_size;
-//     //     let wgt = weights[i];
-//     //     let coord_n = image_coord - off;
-//     //     let coord_p = image_coord + off;
-//     //     let samp_n = textureSample(t_image, s_image, coord_n).rgb;
-//     //     let samp_p = textureSample(t_image, s_image, coord_p).rgb;
-//     //     let color = color + wgt * (samp_n + samp_p);
-//     // }
-//     // return vec4<f32>(color, 1.0);
+    // // wgsl doesn't allow indexing an array with a variable???
+    // let off = vec2<f32>(offsets[0], 0.0) / image_size;
+    // let wgt = weights[0];
+    // let coord = image_coord - off;
+    // let samp = textureSample(t_image, s_image, coord).rgb;
+    // var color = wgt * samp;
+    // for (var i = 1; i < 3; i = i + 1) {
+    //     let off = vec2<f32>(offsets[i], 0.0) / image_size;
+    //     let wgt = weights[i];
+    //     let coord_n = image_coord - off;
+    //     let coord_p = image_coord + off;
+    //     let samp_n = textureSample(t_image, s_image, coord_n).rgb;
+    //     let samp_p = textureSample(t_image, s_image, coord_p).rgb;
+    //     let color = color + wgt * (samp_n + samp_p);
+    // }
+    // return vec4<f32>(color, 1.0);
 
     // unroll.
     let off_0 = vec2<f32>(offsets[0] / image_size.x, 0.0);

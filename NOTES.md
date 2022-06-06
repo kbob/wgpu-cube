@@ -260,11 +260,26 @@ How to multisample a shadow map for smooth edges
 **Virtual Trackballs Revisited**<br>
 *Henriksen, Sporing, Hornbaek*<br>
 DOI:10.1109/TVCG.2004.1260772<br>
-Reviews and compares three trackball models.
+Reviews and compares three trackball models.  The one called Bell wins.
 
 **[Virtual Trackballs and the Exponential Map](http://math.umd.edu/~gogo/Papers/trackballExp.pdf)**<br>
 *Stantchev, U. of Maryland*<br>
 This appears to be a good trackball model.
+
+## Physically-Based Rendering
+
+https://stackoverflow.com/questions/22952742/creating-a-rectangular-light-source-in-opengl
+
+https://de45xmedrsdbp.cloudfront.net/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf
+
+https://www.guerrilla-games.com/presentations/Drobot_Lighting_of_Killzone_Shadow_Fall.
+https://web.archive.org/web/20150324193256/https://www.guerrilla-games.com/presentations/Drobot_Lighting_of_Killzone_Shadow_Fall.pdf
+
+https://www.guerrilla-games.com/read/killzone-shadow-fall-creating-art-tools-for-a-new-generation
+
+**[Metallic Magic](https://medium.com/gametextures/metallic-magic-2dce9001fe15)**<br>
+*Daniel Rose, Game Textures*<br>
+Explains "metal" and "specular" workflows.
 
 ## Disney Shading
 

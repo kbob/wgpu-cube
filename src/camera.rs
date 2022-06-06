@@ -24,9 +24,18 @@ pub const LEFT_HAND_TO_WGPU_MATRIX: Mat4 = Mat4::new(
 struct CameraUniformRaw {
     view_position: [f32; 4],
     world_to_clip: [[f32; 4]; 4],
+    framebuffer_to_texture: [f32; 2],
+    _padding: [f32; 2],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Configuration {
+    pub width: u32,
+    pub height: u32,
 }
 
 pub struct Camera {
+    config: Configuration,
     eye: Point3,
     target: Point3,
     up: Vec3,
@@ -42,13 +51,18 @@ pub struct Camera {
 impl Camera {
     pub fn new(
         device: &wgpu::Device,
-        width: u32,
-        height: u32,
+        config: &Configuration,
         world_hand: Hand,
     ) -> Self {
+        let f2p: [f32; 2] = [
+            1.0 / config.width as f32,
+            1.0 / config.height as f32,
+        ];
         let uniform_raw = CameraUniformRaw {
             view_position: [0.0, 0.0, 0.0, 0.0],
             world_to_clip: Mat4::identity().into(),
+            framebuffer_to_texture: f2p,
+            _padding: [0.0, 0.0],
         };
         let uniform_buffer =
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -58,15 +72,17 @@ impl Camera {
                     | wgpu::BufferUsages::COPY_DST,
             });
 
+        let backup = 1.0; // debug: increase to back up.
         Self {
+            config: *config,
             // hardcoded position, oh my!
-            eye: (0.0, 170.0, 300.0).into(),
+            eye: (0.0, backup * 170.0, backup * 300.0).into(),
             target: (60.0, 0.0, 0.0).into(),
             up: Vec3::unit_y(),
-            aspect: width as f32 / height as f32,
+            aspect: config.width as f32 / config.height as f32,
             fovy: 45.0,
             znear: 100.0,
-            zfar: 1000.0,
+            zfar: backup * 1000.0,
             world_hand: world_hand,
             uniform_buffer,
         }
@@ -80,8 +96,9 @@ impl Camera {
         self.uniform_buffer.as_entire_binding()
     }
 
-    pub fn set_aspect(&mut self, width: u32, height: u32) {
-        self.aspect = width as f32 / height as f32;
+    pub fn resize(&mut self, config: &Configuration) {
+        self.aspect = config.width as f32 / config.height as f32;
+        self.config = *config;
     }
 
     fn build_view_projection_matrix(&self) -> Mat4 {
@@ -109,10 +126,16 @@ pub struct CameraPreparedData {
 
 impl Renderable<CameraAttributes, CameraPreparedData> for Camera {
     fn prepare(&self, _: &CameraAttributes) -> CameraPreparedData {
+        let f2p: [f32; 2] = [
+            1.0 / self.config.width as f32,
+            1.0 / self.config.height as f32,
+        ];
         CameraPreparedData {
             camera_uniform: CameraUniformRaw {
                 view_position: self.eye.to_homogeneous().into(),
                 world_to_clip: self.build_view_projection_matrix().into(),
+                framebuffer_to_texture: f2p,
+                _padding: [0.0, 0.0],
             },
         }
     }

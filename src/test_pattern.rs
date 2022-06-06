@@ -26,15 +26,18 @@ impl TestPattern {
 
     pub fn next_frame(&mut self) -> &PixelArray {
         match TEST_PATTERN_TYPE {
-            0 => {
-                self.frame_number += 1;
-                &self.data
-            }
+            0 => self.next_frame_0(),
             1 => self.next_frame_1(),
             2 => self.next_frame_2(),
             3 => self.next_frame_3(),
+            4 => self.next_frame_4(),
             _ => panic!(),
         }
+    }
+
+    fn next_frame_0(&mut self) -> &PixelArray {
+        self.frame_number += 1;
+        &self.data
     }
 
     fn next_frame_1(&mut self) -> &PixelArray {
@@ -186,6 +189,40 @@ impl TestPattern {
                     self.data[index_4d(face, i, j, 0)] = c[0];
                     self.data[index_4d(face, i, j, 1)] = c[1];
                     self.data[index_4d(face, i, j, 2)] = c[2];
+                }
+            }
+        }
+        &self.data
+    }
+
+    fn next_frame_4(&mut self) -> &PixelArray {
+        const FACE_COLORS: [[u8; 3]; FACE_COUNT] = [
+            [0, 255, 255],
+            [255, 0, 255],
+            [255, 255, 0],
+            [255, 0, 0],
+            [0, 255, 0],
+            [0, 0, 255],
+        ];
+        if self.frame_number >= usize::MAX / 2 {
+            self.frame_number = 0;
+        } else {
+            self.frame_number += 1;
+        }
+        const BPP: usize = CHANNEL_COUNT;
+        const BPFR: usize = SIDE * BPP;
+        const BPCR: usize = FACE_COUNT * BPFR;
+        fn index_4d(face: usize, row: usize, col: usize, chan: usize) -> usize {
+            BPCR * row + BPFR * (FACE_COUNT - face - 1) + BPP * col + chan
+        }
+
+        for face in 0..FACE_COUNT {
+            let color = FACE_COLORS[face];
+            for i in 0..SIDE {
+                for j in 0..SIDE {
+                    self.data[index_4d(face, i, j, 0)] = color[0];
+                    self.data[index_4d(face, i, j, 1)] = color[1];
+                    self.data[index_4d(face, i, j, 2)] = color[2];
                 }
             }
         }

@@ -47,6 +47,11 @@ pub struct Trackball {
 
 impl Trackball {
     pub fn new(viewport_size: &PhysicalSize<u32>) -> Self {
+        // let q = Quaternion::from_arc(
+        //     Vec3::new(1.0, 1.0, 1.0).normalize(),
+        //     Vec3::unit_y(),
+        //     None,
+        // );
         let now = Instant::now();
         let rotation_speed = if ROTATE_AT_START {
             // full rotation every 1024 frames for looping video
@@ -70,6 +75,8 @@ impl Trackball {
 
         Self {
             cached_xform: None,
+            // cur_orientation: q,
+            // prev_orientation: q,
             cur_orientation: Quaternion::one(),
             prev_orientation: Quaternion::one(),
             rot_per_dt: Some(Quaternion::from_axis_angle(
