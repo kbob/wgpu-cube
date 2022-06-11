@@ -315,6 +315,9 @@ decimating the image before blurring.
 **[Filmic Tonemapping with Piecewise Power Curves](http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/)**<br>
 *John Hable, 'blog*<br>
 
+**[Physically Based Bloom](https://learnopengl.com/Guest-Articles/2022/Phys.-Based-Bloom)**<br>
+*Jorge Jimenez, Learn OpenGL*<br>
+
 ## Shaders
 
 **[The Book of Shaders](https://thebookofshaders.com)**<br>
