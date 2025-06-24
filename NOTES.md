@@ -50,11 +50,11 @@ are more.
  * pipeline
  * other?
 
- ### By Visibility
-  * vertex
-  * fragment
-  * both
-  * (compute)
+### By Visibility
+ * vertex
+ * fragment
+ * both
+ * (compute)
 
 # Transformations
 
