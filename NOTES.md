@@ -20,6 +20,7 @@ here.
 https://docs.rs/bevy/latest/bevy/render/enum.RenderStage.html
 
 The six phases are
+
  * Extract
  * Prepare
  * Queue

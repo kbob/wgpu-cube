@@ -11,7 +11,6 @@
 use crate::prelude::*;
 use crate::traits::Renderable;
 use fast_image_resize as fir;
-use std::num::NonZeroU32;
 use wgpu::util::DeviceExt;
 
 #[allow(dead_code)]
@@ -109,9 +108,7 @@ impl Glow {
 
         let resampler = {
             let algorithm = RESAMPLING_ALGORITHM;
-            let resizer = fir::Resizer::new(fir::ResizeAlg::Convolution(
-                fir::FilterType::Lanczos3,
-            ));
+            let resizer = fir::Resizer::new();
             let data = [0u8; DST_BYTE_COUNT];
             Resampler {
                 algorithm,
@@ -192,22 +189,22 @@ impl Resampler {
     fn resample_lanczos(&mut self, blinky: &SrcPixelArray) {
         for face in 0..FACE_COUNT {
             let mut src_face_bytes = blinky.get_face(face);
-            let src_image = fir::Image::from_slice_u8(
-                NonZeroU32::new(SRC_FACE_WIDTH as _).unwrap(),
-                NonZeroU32::new(SRC_FACE_HEIGHT as _).unwrap(),
+            let src_image = fir::images::Image::from_slice_u8(
+                SRC_FACE_WIDTH as _,
+                SRC_FACE_HEIGHT as _,
                 &mut src_face_bytes,
                 fir::PixelType::U8x4,
             )
             .unwrap();
-            let src_view = src_image.view();
-            let mut dst_face_image = fir::Image::new(
-                NonZeroU32::new(DST_FACE_WIDTH as _).unwrap(),
-                NonZeroU32::new(DST_FACE_HEIGHT as _).unwrap(),
-                fir::PixelType::U8x4,
-            );
-            let mut dst_view = dst_face_image.view_mut();
+            let mut dst_face_image = fir::images::Image::new(
+                DST_FACE_WIDTH as _,
+                DST_FACE_HEIGHT as _,
+                fir::PixelType::U8x4);
 
-            self.resizer.resize(&src_view, &mut dst_view).unwrap();
+            let options = fir::ResizeOptions::new()
+                .resize_alg(fir::ResizeAlg::Convolution(fir::FilterType::Lanczos3));
+
+            self.resizer.resize(&src_image, &mut dst_face_image, &options).unwrap();
 
             let face_bytes = dst_face_image.buffer();
             self.data.set_face(face, face_bytes.try_into().unwrap());
@@ -300,22 +297,22 @@ impl Resampler {
     fn resample_intermediate_lanczos(&mut self, int_bytes: &IntPixelArray) {
         for face in 0..FACE_COUNT {
             let mut int_face_bytes = int_bytes.get_face(face);
-            let int_image = fir::Image::from_slice_u8(
-                NonZeroU32::new(INT_FACE_WIDTH as _).unwrap(),
-                NonZeroU32::new(INT_FACE_HEIGHT as _).unwrap(),
+            let int_image = fir::images::Image::from_slice_u8(
+                INT_FACE_WIDTH as _,
+                INT_FACE_HEIGHT as _,
                 &mut int_face_bytes,
                 fir::PixelType::U8x4,
             )
             .unwrap();
-            let int_view = int_image.view();
-            let mut dst_face_image = fir::Image::new(
-                NonZeroU32::new(DST_FACE_WIDTH as _).unwrap(),
-                NonZeroU32::new(DST_FACE_HEIGHT as _).unwrap(),
+            let mut dst_face_image = fir::images::Image::new(
+                DST_FACE_WIDTH as _,
+                DST_FACE_HEIGHT as _,
                 fir::PixelType::U8x4,
             );
-            let mut dst_view = dst_face_image.view_mut();
 
-            self.resizer.resize(&int_view, &mut dst_view).unwrap();
+            let options = fir::ResizeOptions::new()
+                .resize_alg(fir::ResizeAlg::Convolution(fir::FilterType::Lanczos3));
+            self.resizer.resize(&int_image, &mut dst_face_image, &options).unwrap();
 
             let face_bytes = dst_face_image.buffer();
             self.data.set_face(face, face_bytes.try_into().unwrap());
