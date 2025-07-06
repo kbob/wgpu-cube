@@ -2,10 +2,9 @@ use std::{sync::Arc};
 use winit::{
     application::ApplicationHandler,
     event::*,
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
-    // window::WindowBuilder,
 };
 
 mod binding;
@@ -218,7 +217,6 @@ fn create_multisampled_framebuffer(
 
 #[rustfmt::skip]
 struct State {
-    // window: Arc<Window>,
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
@@ -260,7 +258,6 @@ impl State {
             backends: wgpu::Backends::all(),
             ..Default::default()
         });
-//        let surface = unsafe { instance.create_surface(window) };
         let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = instance
@@ -595,7 +592,6 @@ impl State {
         // Results
 
         Self {
-            // window,
             size,
             surface,
             device,
@@ -1064,12 +1060,7 @@ impl ApplicationHandler<State> for App {
             let window = event_loop.create_window(attributes).unwrap();
             Arc::new(window)
         };
-        // let _ = pollster::block_on(State::new(window.clone()));
-        let _ = pollster::block_on(State::new(window));
 
-        event_loop.exit();
-        return;
-        #[allow(unreachable_code)]0;
         self.state = Some(pollster::block_on(State::new(window.clone())));
         self.stats.start();
     }
@@ -1087,17 +1078,7 @@ impl ApplicationHandler<State> for App {
         // XXX test window ID
         if !state.handle_window_event(&event) {
             match event {
-                //// works for winit 0.26
-                // WindowEvent::CloseRequested
-                // | WindowEvent::KeyboardInput {
-                //     input:
-                //         KeyboardInput {
-                //             state: ElementState::Pressed,
-                //             virtual_keycode: Some(VirtualKeyCode::Escape),
-                //             ..
-                //         },
-                //     ..
-                // } => *control_flow = ControlFlow::Exit,
+
                 WindowEvent::CloseRequested => event_loop.exit(),
                 WindowEvent::KeyboardInput {
                     event: KeyEvent {
@@ -1122,119 +1103,33 @@ impl ApplicationHandler<State> for App {
                     // state.resize(**new_inner_size);
                 }
 
-                WindowEvent::RedrawRequested => {
-                    // window.request_redraw();
-                    state.update();
-                    match state.render() {
-                        Ok(_) => {}
-                        Err(wgpu::SurfaceError::Lost) => {
-                            state.resize(state.size)
-                        }
-                        Err(wgpu::SurfaceError::OutOfMemory) => {
-                            event_loop.exit()
-                        }
-                        Err(e) => eprintln!("{:?}", e)
-                    }
-                    self.stats.count_frame();
-                }
-
                 _ => {}
             }
         }
     }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(ref mut state ) = self.state {
+            state.update();
+            match state.render() {
+                Ok(_) => {}
+                Err(wgpu::SurfaceError::Lost) => {
+                    state.resize(state.size)
+                }
+                Err(wgpu::SurfaceError::OutOfMemory) => {
+                    event_loop.exit()
+                }
+                Err(e) => eprintln!("{:?}", e)
+            }
+            self.stats.count_frame();
+        }
+    }
 }
-
-// fn xxx_main() {
-//     env_logger::init();
-//     let event_loop = EventLoop::new().unwrap();
-//     // let ph = winit::dpi::PhysicalSize::new(1920, 1080);
-//     let window = {
-//         // let window: Window = WindowBuilder::new()
-//         //     .with_title("Hello WGPU")
-//         //     .with_inner_size(winit::dpi::Size::Physical(ph))
-//         //     .build(&event_loop)
-//         //     .unwrap();
-//         let window = event_loop.create_window(Window::default_attributes()).unwrap();
-//         Arc::new(window)
-//     };
-//     let mut state = pollster::block_on(State::new(window.clone()));
-//     let mut stats = Stats::new();
-
-//     event_loop.run(move |event, _| match event {
-//         Event::WindowEvent {
-//             ref event,
-//             window_id,
-//         } if window_id == window.id() => {
-//             if !state.handle_window_event(event) {
-//                 match event {
-//                     //// works for winit 0.26
-//                     // WindowEvent::CloseRequested
-//                     // | WindowEvent::KeyboardInput {
-//                     //     input:
-//                     //         KeyboardInput {
-//                     //             state: ElementState::Pressed,
-//                     //             virtual_keycode: Some(VirtualKeyCode::Escape),
-//                     //             ..
-//                     //         },
-//                     //     ..
-//                     // } => *control_flow = ControlFlow::Exit,
-
-//                     // WindowEvent::CloseRequested => event_loop.exit(),
-//                     // WindowEvent::KeyboardInput {
-//                     //     event: KeyEvent {
-//                     //         physical_key: PhysicalKey::Code(code),
-//                     //         state,
-//                     //         ..
-//                     //     },
-//                     //     ..
-//                     // } => match (code, state.is_pressed()) {
-//                     //     (KeyCode::Escape, true) => event_loop.exit(),
-//                     //     _ => {}
-//                     // }
-
-//                     WindowEvent::Resized(physical_size) => {
-//                         state.resize(*physical_size);
-//                     }
-
-//                     WindowEvent::ScaleFactorChanged {
-//                         // new_inner_size, ..
-//                         ..
-//                     } => {
-//                         // state.resize(**new_inner_size);
-//                     }
-
-//                     // WindowEvent::RedrawRequested => {
-//                     //     // window.request_redraw();
-//                     //     state.update();
-//                     //     match state.render() {
-//                     //         Ok(_) => {}
-//                     //         Err(wgpu::SurfaceError::Lost) => {
-//                     //             state.resize(state.size)
-//                     //         }
-//                     //         Err(wgpu::SurfaceError::OutOfMemory) => {
-//                     //             event_loop.exit()
-//                     //         }
-//                     //         Err(e) => eprintln!("{:?}", e)
-//                     //     }
-//                     //     stats.count_frame();
-//                     // }
-
-//                     _ => {}
-//                 }
-//             }
-//         }
-
-//         // Event::MainEventsCleared => {
-//         //     window.request_redraw();
-//         // }
-
-//         _ => {}
-//     });
-// }
 
 fn main() {
     env_logger::init();
     let event_loop: EventLoop<State> = EventLoop::with_user_event().build().unwrap();
+    event_loop.set_control_flow(ControlFlow::Poll);
     let mut app = App::new();
     event_loop.run_app(&mut app).unwrap();
 }

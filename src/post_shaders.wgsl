@@ -1,25 +1,25 @@
 struct PostUniform {
-    image_size: vec2<f32>;
-    output_size: vec2<f32>;
-};
-[[group(2), binding(0)]]
+    image_size: vec2<f32>,
+    output_size: vec2<f32>,
+}
+@group(2) @binding(0)
 var<uniform> post: PostUniform;
 
 // Vertex Shader
 
 struct VertexOutput {
-    [[builtin(position)]] position: vec4<f32>;
-    [[location(0)]] coord: vec2<f32>;
-};
+    @builtin(position) position: vec4<f32>,
+    @location(0) coord: vec2<f32>,
+}
 
-[[stage(vertex)]]
+@vertex
 fn vs_main(
-    [[location(0)]] position: vec4<f32>,
+    @location(0) position: vec4<f32>,
 ) -> VertexOutput {
     // xy: domain is (-1, -1)..(+1, +1).
     //     range is (-1, -1)..((-1, -1) + 2 * out_size).
     let xy = (position.xy + 1.0) * post.output_size - 1.0;
-    let pos = vec4<f32>(xy, position.za);
+    let pos = vec4<f32>(xy, position.z, position.a);
 
     // uv: domain is (-1, -1)..(+1, +1)
     //     range is (0, 1)..(image_size.x, 1 - image_size.y).
@@ -32,20 +32,20 @@ fn vs_main(
 
 // Fragment Shader
 
-[[group(2), binding(1)]]
+@group(2) @binding(1)
 var t_image: texture_2d<f32>;
 
-[[group(2), binding(2)]]
+@group(2) @binding(2)
 var s_image: sampler;
 
-let offsets: array<f32, 3> = array<f32, 3>(0.0, 1.3846153846, 3.2307692308);
-let weights: array<f32, 3> =
+const offsets: array<f32, 3> = array<f32, 3>(0.0, 1.3846153846, 3.2307692308);
+const weights: array<f32, 3> =
     array<f32, 3>(0.2270270270, 0.3162162162, 0.0702702703);
 
-[[stage(fragment)]]
+@fragment
 fn fs_horizontal_blur_main(
     in: VertexOutput,
-) -> [[location(0)]] vec4<f32> {
+) -> @location(0) vec4<f32> {
     let image_coord = in.coord;
     let image_size = vec2<f32>(textureDimensions(t_image));
 
@@ -91,10 +91,10 @@ fn fs_horizontal_blur_main(
     return vec4<f32>(color, 1.0);
 }
 
-[[stage(fragment)]]
+@fragment
 fn fs_vertical_blur_main(
     in: VertexOutput,
-) -> [[location(0)]] vec4<f32> {
+) -> @location(0) vec4<f32> {
     let image_coord = in.coord;
     let image_size = vec2<f32>(textureDimensions(t_image));
 
@@ -146,13 +146,13 @@ fn fs_vertical_blur_main(
 // Here are several tone mapping algorithms.  See the Tone Mapping paper
 // in NOTES.md.
 
-let EXPOSURE: f32 = 1.0;
-let GAMMA: f32 = 2.2;
+const EXPOSURE: f32 = 1.0;
+const GAMMA: f32 = 2.2;
 
-[[group(2), binding(3)]]
+@group(2) @binding(3)
 var t_bright: texture_2d<f32>;
 
-[[group(2), binding(4)]]
+@group(2) @binding(4)
 var s_bright: sampler;
 
 
@@ -188,10 +188,10 @@ fn reinhard_luminance_tone_map(C: vec3<f32>, Lwhite: f32) -> vec3<f32> {
 // fn uncharted2_filmic_tone_map(C: vec3<f32>) -> vec3<f32> {}
 // fn aces_fitted_tone_map(C: vec3<f32>) -> vec3<f32> {}
 
-[[stage(fragment)]]
+@fragment
 fn fs_composite_main(
     in: VertexOutput,
-) -> [[location(0)]] vec4<f32> {
+) -> @location(0) vec4<f32> {
     let ldr_index = vec2<i32>(in.position.xy + 0.5);
     let bright_coord = in.coord;
     let ldr_color = textureLoad(t_image, ldr_index, 0).rgb;

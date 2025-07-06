@@ -3,46 +3,46 @@
 // ----  Common Data   ---- ---- ---- ---- ---- ---- ---- ---- ---- ----
 
 struct CameraUniform {
-    view_position: vec4<f32>;
-    world_to_clip: mat4x4<f32>;
-    framebuffer_to_texture: vec2<f32>;
-};
-[[group(0), binding(1)]]
+    view_position: vec4<f32>,
+    world_to_clip: mat4x4<f32>,
+    framebuffer_to_texture: vec2<f32>,
+}
+@group(0) @binding(1)
 var<uniform> camera: CameraUniform;
 
 struct Light {
-    color: vec4<f32>;
-    direction: vec4<f32>;
-    position: vec4<f32>;
-    proj: mat4x4<f32>;
-    shadow_map_size: f32;
-    shadow_map_inv_size: f32;
-};
+    color: vec4<f32>,
+    direction: vec4<f32>,
+    position: vec4<f32>,
+    proj: mat4x4<f32>,
+    shadow_map_size: f32,
+    shadow_map_inv_size: f32,
+}
 struct LightsUniform {
-    count: u32;
-    lights: array<Light, 8>;
-};
-[[group(0), binding(2)]]
+    count: u32,
+    lights: array<Light, 8>,
+}
+@group(0) @binding(2)
 var<uniform> lights: LightsUniform;
 
 struct CubeUniform {
-    cube_to_world: mat4x4<f32>;
-    decal_visibility: f32;
-};
-[[group(1), binding(1)]]
+    cube_to_world: mat4x4<f32>,
+    decal_visibility: f32,
+}
+@group(1) @binding(1)
 var<uniform> cube: CubeUniform;
 
 struct ShadowUniform {
-    world_to_clip: mat4x4<f32>;
-};
-[[group(2), binding(0)]]
+    world_to_clip: mat4x4<f32>,
+}
+@group(2) @binding(0)
 var<uniform> shadow: ShadowUniform;
 
-let TAU: f32 = 6.283185307179586;
-let PI: f32 = 3.141592653589793;
+const TAU: f32 = 6.283185307179586;
+const PI: f32 = 3.141592653589793;
 
-let USE_BRDF_FLAG: bool = true;
-let PRECOMPUTE_GLOW_FLAG: bool = true;
+const USE_BRDF_FLAG: bool = true;
+const PRECOMPUTE_GLOW_FLAG: bool = true;
 
 // ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ====
 // ====  Vertex Shaders
@@ -51,34 +51,34 @@ let PRECOMPUTE_GLOW_FLAG: bool = true;
 // ----  Common Vertex Shader Functions  - ---- ---- ---- ---- ---- ----
 
 fn extract3x3(in: mat4x4<f32>) -> mat3x3<f32> {
-    return mat3x3<f32>(in.x.xyz, in.y.xyz, in.z.xyz);
+    return mat3x3<f32>(in[0].xyz, in[1].xyz, in[2].xyz);
 }
 
 
 // ----  Cube Face Vertex Shader  --- ---- ---- ---- ---- ---- ---- ----
 
 struct CubeFaceInstanceInput {
-    [[location(5)]] face_to_cube_0: vec4<f32>;
-    [[location(6)]] face_to_cube_1: vec4<f32>;
-    [[location(7)]] face_to_cube_2: vec4<f32>;
-    [[location(8)]] face_to_cube_3: vec4<f32>;
-    [[location(9)]] decal_offset: vec2<f32>;
-};
+    @location(5) face_to_cube_0: vec4<f32>,
+    @location(6) face_to_cube_1: vec4<f32>,
+    @location(7) face_to_cube_2: vec4<f32>,
+    @location(8) face_to_cube_3: vec4<f32>,
+    @location(9) decal_offset: vec2<f32>,
+}
 
 struct CubeFaceVertexInput {
-    [[location(0)]] position: vec3<f32>;
-    [[location(1)]] normal: vec3<f32>;
-    [[location(2)]] decal_coords: vec2<f32>;
-};
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) decal_coords: vec2<f32>,
+}
 
 struct CubeFaceVertexOutput {
-    [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(0), interpolate(perspective, sample)]] world_position: vec4<f32>;
-    [[location(1), interpolate(perspective, sample)]] world_normal: vec3<f32>;
-    [[location(2), interpolate(perspective, sample)]] decal_coords: vec2<f32>;
-};
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) @interpolate(perspective, sample) world_position: vec4<f32>,
+    @location(1) @interpolate(perspective, sample) world_normal: vec3<f32>,
+    @location(2) @interpolate(perspective, sample) decal_coords: vec2<f32>,
+}
 
-[[stage(vertex)]]
+@vertex
 fn vs_cube_face_main(
     model: CubeFaceVertexInput,
     instance: CubeFaceInstanceInput,
@@ -110,11 +110,11 @@ fn vs_cube_face_main(
 }
 
 // face vertex shader for shadow pass
-[[stage(vertex)]]
+@vertex
 fn vs_cube_face_shadow_main(
     model: CubeFaceVertexInput,
     instance: CubeFaceInstanceInput,
-) -> [[builtin(position)]] vec4<f32> {
+) -> @builtin(position) vec4<f32> {
     let face_to_cube = mat4x4<f32>(
         instance.face_to_cube_0,
         instance.face_to_cube_1,
@@ -134,17 +134,17 @@ fn vs_cube_face_shadow_main(
 // ----  Cube Face Vertex Shader  --- ---- ---- ---- ---- ---- ---- ----
 
 struct CubeEdgeVertexInput {
-    [[location(0)]] position: vec3<f32>;
-    [[location(1)]] normal: vec3<f32>;
-};
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+}
 
 struct CubeEdgeVertexOutput {
-    [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(0)]] world_position: vec4<f32>;
-    [[location(1)]] world_normal: vec3<f32>;
-};
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) world_position: vec4<f32>,
+    @location(1) world_normal: vec3<f32>,
+}
 
-[[stage(vertex)]]
+@vertex
 fn vs_cube_edge_main(
     model: CubeEdgeVertexInput,
 ) -> CubeEdgeVertexOutput {
@@ -163,10 +163,10 @@ fn vs_cube_edge_main(
 }
 
 // edge vertex shader for shadow pass
-[[stage(vertex)]]
+@vertex
 fn vs_cube_edge_shadow_main(
     model: CubeEdgeVertexInput,
-) -> [[builtin(position)]] vec4<f32> {
+) -> @builtin(position) vec4<f32> {
     let cube_pos = vec4<f32>(model.position, 1.0);
     let world_pos = cube.cube_to_world * cube_pos;
     let clip_pos = shadow.world_to_clip * world_pos;
@@ -176,21 +176,21 @@ fn vs_cube_edge_shadow_main(
 // ----  Floor Vertex Shader  -- ---- ---- ---- ---- ---- ---- ---- ----
 
 struct FloorVertexInput {
-    [[location(0)]] position: vec3<f32>;
-    [[location(1)]] normal: vec3<f32>;
-    [[location(2)]] decal_coords: vec2<f32>;
-};
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) decal_coords: vec2<f32>,
+}
 
 struct FloorVertexOutput {
-    [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(0), interpolate(perspective, sample)]] world_position: vec4<f32>;
-    [[location(1), interpolate(perspective, sample)]] world_normal: vec3<f32>;
-    [[location(2), interpolate(perspective, sample)]] decal_coords: vec2<f32>;
-};
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) @interpolate(perspective, sample) world_position: vec4<f32>,
+    @location(1) @interpolate(perspective, sample) world_normal: vec3<f32>,
+    @location(2) @interpolate(perspective, sample) decal_coords: vec2<f32>,
+}
 
 // N.B., vs_floor_main is used both for floor in forward pass
 // and for prefloor pass.
-[[stage(vertex)]]
+@vertex
 fn vs_floor_main(
     model: FloorVertexInput,
 ) -> FloorVertexOutput {
@@ -207,10 +207,10 @@ fn vs_floor_main(
     return out;
 }
 
-[[stage(vertex)]]
+@vertex
 fn vs_floor_shadow_main(
     model: FloorVertexInput,
-) -> [[builtin(position)]] vec4<f32> {
+) -> @builtin(position) vec4<f32> {
     let world_pos = vec4<f32>(model.position, 1.0);
     let clip_pos = shadow.world_to_clip * world_pos;
     return clip_pos;
@@ -220,27 +220,27 @@ fn vs_floor_shadow_main(
 // ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ====
 // ====  Fragment Shaders
 
-[[group(2), binding(0)]]
+@group(2) @binding(0)
 var t_shadow_maps: texture_depth_2d_array;
-[[group(2), binding(1)]]
+@group(2) @binding(1)
 var s_shadow_maps: sampler_comparison;
 
 
 // ----  "Disney" BRDF  --- ---- ---- ---- ---- ---- ---- ---- ---- ----
 
 struct Material {
-    base_color: vec3<f32>;
-    subsurface: f32;
-    metallic: f32;
-    specular: f32;
-    specular_tint: f32;
-    roughness: f32;
-    anisotropic: f32;
-    sheen: f32;
-    sheen_tint: f32;
-    clearcoat: f32;
-    clearcoat_gloss: f32;
-};
+    base_color: vec3<f32>,
+    subsurface: f32,
+    metallic: f32,
+    specular: f32,
+    specular_tint: f32,
+    roughness: f32,
+    anisotropic: f32,
+    sheen: f32,
+    sheen_tint: f32,
+    clearcoat: f32,
+    clearcoat_gloss: f32,
+}
 
 fn material_defaults() -> Material {
     var out: Material;
@@ -620,20 +620,20 @@ fn fetch_shadow16(light_index: u32, homogeneous_coords: vec4<f32>) -> f32 {
 
 // ----  Cube Face Fragment Shader  - ---- ---- ---- ---- ---- ---- ----
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var t_decal: texture_2d<f32>;
 
-[[group(1), binding(0)]]
+@group(1) @binding(0)
 var t_blinky: texture_2d<u32>;
 
-let cube_face_material_color: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
-let cube_face_material_roughness: f32 = 0.6;
-let cube_face_base_color: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
+const cube_face_material_color: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
+const cube_face_material_roughness: f32 = 0.6;
+const cube_face_base_color: vec4<f32> = vec4<f32>(0.02, 0.02, 0.02, 1.0);
 // 0.06 is more realistic.  0.0 has higher contrast.
 // let led_base_color: vec4<f32> = vec4<f32>(0.06, 0.06, 0.06, 1.0);
-let led_base_color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
-let led_r2: f32 = 0.15;
-let led_brightness: f32 = 2.0;
+const led_base_color: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+const led_r2: f32 = 0.15;
+const led_brightness: f32 = 2.0;
 
 fn face_color_brdf(
     tex_index: vec2<i32>,
@@ -732,11 +732,11 @@ fn led_color(
 }
 
 struct CubeFaceFragmentOutput {
-    [[location(0)]] color: vec4<f32>;
-    [[location(1)]] bright_color: vec4<f32>;
-};
+    @location(0) color: vec4<f32>,
+    @location(1) bright_color: vec4<f32>,
+}
 
-[[stage(fragment)]]
+@fragment
 fn fs_cube_face_main(in: CubeFaceVertexOutput) -> CubeFaceFragmentOutput {
     let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
     let pix_coord = t_coord * 64.0;
@@ -772,8 +772,8 @@ fn fs_cube_face_main(in: CubeFaceVertexOutput) -> CubeFaceFragmentOutput {
 
 // let cube_edge_material_color = vec4<f32>(0.718, 0.055, 0.0, 1.0);
 // let cube_edge_material_color = vec4<f32>(0.0, 0.99, 1.0, 1.0);
-let cube_edge_material_color = vec4<f32>(0.05, 0.05, 0.05, 1.0);
-let cube_edge_material_roughness = 0.1;
+const cube_edge_material_color = vec4<f32>(0.05, 0.05, 0.05, 1.0);
+const cube_edge_material_roughness = 0.1;
 
 fn edge_color_brdf(
     N: vec3<f32>,
@@ -839,11 +839,11 @@ fn edge_color_classic(
 }
 
 struct CubeEdgeFragmentOutput {
-    [[location(0)]] color: vec4<f32>;
-    [[location(1)]] bright_color: vec4<f32>;
-};
+    @location(0) color: vec4<f32>,
+    @location(1) bright_color: vec4<f32>,
+}
 
-[[stage(fragment)]]
+@fragment
 fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> CubeEdgeFragmentOutput {
     let N = normalize(in.world_normal);
     let V = normalize(camera.view_position.xyz - in.world_position.xyz);
@@ -869,28 +869,28 @@ fn fs_cube_edge_main(in: CubeEdgeVertexOutput) -> CubeEdgeFragmentOutput {
 // ----  Floor Fragment Shader   ---- ---- ---- ---- ---- ---- ---- ----
 
 struct GlowUniform {
-    faces_to_cube: array<mat4x4<f32>, 6>;
-};
-[[group(0), binding(5)]]
+    faces_to_cube: array<mat4x4<f32>, 6>,
+}
+@group(0) @binding(5)
 var<uniform> glow: GlowUniform;
-let glow_size: i32 = 5;
+const glow_size: i32 = 5;
 
-[[group(0), binding(3)]]
+@group(0) @binding(3)
 var t_floor_decal: texture_2d<f32>;
-[[group(0), binding(4)]]
+@group(0) @binding(4)
 var s_floor_decal: sampler;
-[[group(1), binding(2)]]
+@group(1) @binding(2)
 var t_glow: texture_2d<f32>;
-[[group(2), binding(3)]]
+@group(2) @binding(3)
 var t_pre_glow: texture_2d<f32>;
-[[group(2), binding(4)]]
+@group(2) @binding(4)
 var s_pre_glow: sampler;
 
 // No base material color.  It comes from the decal texture.
-let floor_material_roughness: f32 = 0.6;
+const floor_material_roughness: f32 = 0.6;
 // glow_brightness is huge because distance^-2 falloff is huge.
-let glow_brightness: f32 = 320000.0;
-let classic_glow_brightness = 4800.0;
+const glow_brightness: f32 = 320000.0;
+const classic_glow_brightness = 4800.0;
 
 fn floor_glow_brdf(
     material: Material,
@@ -1082,12 +1082,12 @@ fn floor_color_classic(
 }
 
 struct FloorFragmentOutput {
-    [[location(0)]] color: vec4<f32>;
-    [[location(1)]] bright_color: vec4<f32>;
-};
+    @location(0) color: vec4<f32>,
+    @location(1) bright_color: vec4<f32>,
+}
 
-[[stage(fragment)]]
-fn fs_prefloor_main(in: FloorVertexOutput) -> [[location(0)]] vec4<f32> {
+@fragment
+fn fs_prefloor_main(in: FloorVertexOutput) -> @location(0) vec4<f32> {
     let N = normalize(in.world_normal);
     let V = normalize(camera.view_position.xyz - in.world_position.xyz);
     let world_pos = in.world_position;
@@ -1113,7 +1113,7 @@ fn fs_prefloor_main(in: FloorVertexOutput) -> [[location(0)]] vec4<f32> {
     return vec4<f32>(color, 1.0);
 }
 
-[[stage(fragment)]]
+@fragment
 fn fs_floor_main(in: FloorVertexOutput) -> FloorFragmentOutput {
     let t_coord = vec2<f32>(in.decal_coords.x, 1.0 - in.decal_coords.y);
     let image_coords = in.clip_position.xy * camera.framebuffer_to_texture;
