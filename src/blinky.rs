@@ -23,6 +23,7 @@ impl Blinky {
             format: wgpu::TextureFormat::Rgba8Uint,
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
         });
         let blinky_texture_view =
             blinky_texture.create_view(&wgpu::TextureViewDescriptor {
@@ -67,9 +68,9 @@ impl Renderable<BlinkyAttributes, BlinkyPreparedData> for Blinky {
         queue.write_texture(
             self.blinky_texture.as_image_copy(),
             self.test_pattern.current_frame(),
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: std::num::NonZeroU32::new(6 * 64 * 4),
+                bytes_per_row: Some(6 * 64 * 4),
                 rows_per_image: None,
             },
             wgpu::Extent3d {

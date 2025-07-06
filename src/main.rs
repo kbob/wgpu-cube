@@ -1,8 +1,11 @@
+use std::{sync::Arc};
 use winit::{
+    application::ApplicationHandler,
     event::*,
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{ActiveEventLoop, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
     window::Window,
-    window::WindowBuilder,
+    // window::WindowBuilder,
 };
 
 mod binding;
@@ -71,7 +74,8 @@ fn create_forward_render_pipeline(
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: &shader,
-            entry_point: vertex_entry,
+            entry_point: Some(vertex_entry),
+            compilation_options: Default::default(),
             buffers: vertex_layouts,
         },
         primitive: wgpu::PrimitiveState {
@@ -103,24 +107,26 @@ fn create_forward_render_pipeline(
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: fragment_entry,
+            entry_point: Some(fragment_entry),
+            compilation_options: Default::default(),
             targets: &[
-                wgpu::ColorTargetState {
+                Some(wgpu::ColorTargetState {
                     format: color_format,
                     blend: Some(match ALPHA_BLENDING {
                         true => wgpu::BlendState::ALPHA_BLENDING,
                         false => wgpu::BlendState::REPLACE,
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
-                },
-                wgpu::ColorTargetState {
+                }),
+                Some(wgpu::ColorTargetState {
                     format: BRIGHT_COLOR_PIXEL_FORMAT,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
-                },
+                }),
             ],
         }),
         multiview: None,
+        cache: None,
     })
 }
 
@@ -137,7 +143,8 @@ fn create_shadow_render_pipeline(
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: &shader,
-            entry_point: vertex_entry,
+            entry_point: Some(vertex_entry),
+            compilation_options: Default::default(),
             buffers: vertex_layouts,
         },
         primitive: wgpu::PrimitiveState {
@@ -172,6 +179,7 @@ fn create_shadow_render_pipeline(
         multisample: wgpu::MultisampleState::default(),
         fragment: None,
         multiview: None,
+        cache: None,
     })
 }
 
@@ -200,6 +208,7 @@ fn create_multisampled_framebuffer(
                         dimension: wgpu::TextureDimension::D2,
                         format: format,
                         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                        view_formats: &[],
                     })
                     .create_view(&wgpu::TextureViewDescriptor::default()),
             )
@@ -209,8 +218,9 @@ fn create_multisampled_framebuffer(
 
 #[rustfmt::skip]
 struct State {
+    // window: Arc<Window>,
     size: winit::dpi::PhysicalSize<u32>,
-    surface: wgpu::Surface,
+    surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
@@ -241,13 +251,17 @@ struct State {
 }
 
 impl State {
-    async fn new(window: &Window) -> Self {
+    async fn new(window: Arc<Window>) -> Self {
         //
         // Device and Surface
 
         let size = window.inner_size();
-        let instance = wgpu::Instance::new(wgpu::Backends::all());
-        let surface = unsafe { instance.create_surface(window) };
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            ..Default::default()
+        });
+//        let surface = unsafe { instance.create_surface(window) };
+        let surface = instance.create_surface(window.clone()).unwrap();
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -262,20 +276,30 @@ impl State {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("device"),
-                    features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::default(),
-                },
-                None,
-            )
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::default(),
+                    memory_hints: Default::default(),
+                    trace: wgpu::Trace::Off,
+                })
             .await
             .unwrap();
 
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface.get_preferred_format(&adapter).unwrap(),
-            width: size.width,
-            height: size.height,
-            present_mode: wgpu::PresentMode::Fifo,
+        let config = {
+            let surface_caps = surface.get_capabilities(&adapter);
+            let surface_format = surface_caps.formats.iter()
+                .find(|f| f.is_srgb())
+                .copied()
+                .unwrap_or(surface_caps.formats[0]);
+            wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format: surface_format,
+                width: size.width,
+                height: size.height,
+                present_mode: wgpu::PresentMode::Fifo,
+                alpha_mode: surface_caps.alpha_modes[0],
+                view_formats: vec![],
+                desired_maximum_frame_latency: 2,
+            }
         };
         surface.configure(&device, &config);
 
@@ -290,7 +314,7 @@ impl State {
 
         let common_shader = {
             let descriptor = wgpu::include_wgsl!("common_shader.wgsl");
-            device.create_shader_module(&descriptor)
+            device.create_shader_module(descriptor)
         };
 
         // Camera
@@ -571,6 +595,7 @@ impl State {
         // Results
 
         Self {
+            // window,
             size,
             surface,
             device,
@@ -732,11 +757,13 @@ impl State {
                             view: self.lights.light_shadow_view(light_index),
                             depth_ops: Some(wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(0.0),
-                                store: true,
+                                store: wgpu::StoreOp::Store,
                             }),
                             stencil_ops: None,
                         },
                     ),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
                 });
 
             shadow_pass.set_bind_group(
@@ -809,38 +836,38 @@ impl State {
 
             let bright_view: &wgpu::TextureView;
             let bright_resolve_target: Option<&wgpu::TextureView>;
-            let store: bool;
+            let store: wgpu::StoreOp;
             match &self.multisampled_bright_color {
                 Some(msfb) => {
                     bright_view = &msfb;
                     bright_resolve_target =
                         Some(&self.post.bright_framebuffer());
-                    store = false;
+                    store = wgpu::StoreOp::Discard;
                 }
                 None => {
                     bright_view = &self.post.bright_framebuffer();
                     bright_resolve_target = None;
-                    store = true;
+                    store = wgpu::StoreOp::Store;
                 }
             }
 
             let color_attachments = vec![
-                wgpu::RenderPassColorAttachment {
+                Some(wgpu::RenderPassColorAttachment {
                     view: color_view,
                     resolve_target: color_resolve_target,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(BACKGROUND_COLOR),
                         store: store,
                     },
-                },
-                wgpu::RenderPassColorAttachment {
+                }),
+                Some(wgpu::RenderPassColorAttachment {
                     view: bright_view,
                     resolve_target: bright_resolve_target,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::default()),
                         store: store,
                     },
-                },
+                }),
             ];
 
             let mut render_pass =
@@ -852,11 +879,13 @@ impl State {
                             view: &self.depth_texture.view,
                             depth_ops: Some(wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(z_far),
-                                store: false,
+                                store: wgpu::StoreOp::Discard,
                             }),
                             stencil_ops: None,
                         },
                     ),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
                 });
 
             render_pass.set_bind_group(
@@ -980,6 +1009,13 @@ impl Stats {
             last_frame_time: now,
         }
     }
+    fn start(&mut self) {
+        let now = std::time::Instant::now();
+        self.frame_count = 0;
+        self.prev_frame_count = 0;
+        self.prev_time = now;
+        self.last_frame_time = now;
+    }
     fn count_frame(&mut self) {
         self.frame_count += 1;
 
@@ -1002,68 +1038,203 @@ impl Stats {
     }
 }
 
-fn main() {
-    env_logger::init();
-    let event_loop = EventLoop::new();
-    let ph = winit::dpi::PhysicalSize::new(1920, 1080);
-    let window = WindowBuilder::new()
-        .with_title("Hello WGPU")
-        .with_inner_size(winit::dpi::Size::Physical(ph))
-        .build(&event_loop)
-        .unwrap();
-    let mut state = pollster::block_on(State::new(&window));
-    let mut stats = Stats::new();
+struct App {
+    state: Option<State>,
+    stats: Stats,
+}
 
-    event_loop.run(move |event, _, control_flow| match event {
-        Event::WindowEvent {
-            ref event,
-            window_id,
-        } if window_id == window.id() => {
-            if !state.handle_window_event(event) {
-                match event {
-                    WindowEvent::CloseRequested
-                    | WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state: ElementState::Pressed,
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                ..
-                            },
+impl App {
+    pub fn new() -> Self {
+        Self {
+            state: None,
+            stats: Stats::new(),
+        }
+    }
+}
+
+impl ApplicationHandler<State> for App {
+
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let ph = winit::dpi::PhysicalSize::new(1920, 1080);
+        let window = {
+            let attributes = Window::default_attributes()
+                .with_title("Hello WGPU")
+                .with_inner_size(winit::dpi::Size::Physical(ph));
+
+            let window = event_loop.create_window(attributes).unwrap();
+            Arc::new(window)
+        };
+        // let _ = pollster::block_on(State::new(window.clone()));
+        let _ = pollster::block_on(State::new(window));
+
+        event_loop.exit();
+        return;
+        #[allow(unreachable_code)]0;
+        self.state = Some(pollster::block_on(State::new(window.clone())));
+        self.stats.start();
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        let state = match &mut self.state {
+            Some(canvas) => canvas,
+            None => return,
+        };
+        // XXX test window ID
+        if !state.handle_window_event(&event) {
+            match event {
+                //// works for winit 0.26
+                // WindowEvent::CloseRequested
+                // | WindowEvent::KeyboardInput {
+                //     input:
+                //         KeyboardInput {
+                //             state: ElementState::Pressed,
+                //             virtual_keycode: Some(VirtualKeyCode::Escape),
+                //             ..
+                //         },
+                //     ..
+                // } => *control_flow = ControlFlow::Exit,
+                WindowEvent::CloseRequested => event_loop.exit(),
+                WindowEvent::KeyboardInput {
+                    event: KeyEvent {
+                        physical_key: PhysicalKey::Code(code),
+                        state,
                         ..
-                    } => *control_flow = ControlFlow::Exit,
-
-                    WindowEvent::Resized(physical_size) => {
-                        state.resize(*physical_size);
-                    }
-
-                    WindowEvent::ScaleFactorChanged {
-                        new_inner_size, ..
-                    } => {
-                        state.resize(**new_inner_size);
-                    }
-
+                    },
+                    ..
+                } => match (code, state.is_pressed()) {
+                    (KeyCode::Escape, true) => event_loop.exit(),
                     _ => {}
                 }
-            }
-        }
 
-        Event::RedrawRequested(window_id) if window_id == window.id() => {
-            state.update();
-            match state.render() {
-                Ok(_) => {}
-                Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                Err(wgpu::SurfaceError::OutOfMemory) => {
-                    *control_flow = ControlFlow::Exit
+                WindowEvent::Resized(physical_size) => {
+                    state.resize(physical_size);
                 }
-                Err(e) => eprintln!("{:?}", e),
+
+                WindowEvent::ScaleFactorChanged {
+                    // new_inner_size, ..
+                    ..
+                } => {
+                    // state.resize(**new_inner_size);
+                }
+
+                WindowEvent::RedrawRequested => {
+                    // window.request_redraw();
+                    state.update();
+                    match state.render() {
+                        Ok(_) => {}
+                        Err(wgpu::SurfaceError::Lost) => {
+                            state.resize(state.size)
+                        }
+                        Err(wgpu::SurfaceError::OutOfMemory) => {
+                            event_loop.exit()
+                        }
+                        Err(e) => eprintln!("{:?}", e)
+                    }
+                    self.stats.count_frame();
+                }
+
+                _ => {}
             }
-            stats.count_frame();
         }
+    }
+}
 
-        Event::MainEventsCleared => {
-            window.request_redraw();
-        }
+// fn xxx_main() {
+//     env_logger::init();
+//     let event_loop = EventLoop::new().unwrap();
+//     // let ph = winit::dpi::PhysicalSize::new(1920, 1080);
+//     let window = {
+//         // let window: Window = WindowBuilder::new()
+//         //     .with_title("Hello WGPU")
+//         //     .with_inner_size(winit::dpi::Size::Physical(ph))
+//         //     .build(&event_loop)
+//         //     .unwrap();
+//         let window = event_loop.create_window(Window::default_attributes()).unwrap();
+//         Arc::new(window)
+//     };
+//     let mut state = pollster::block_on(State::new(window.clone()));
+//     let mut stats = Stats::new();
 
-        _ => {}
-    });
+//     event_loop.run(move |event, _| match event {
+//         Event::WindowEvent {
+//             ref event,
+//             window_id,
+//         } if window_id == window.id() => {
+//             if !state.handle_window_event(event) {
+//                 match event {
+//                     //// works for winit 0.26
+//                     // WindowEvent::CloseRequested
+//                     // | WindowEvent::KeyboardInput {
+//                     //     input:
+//                     //         KeyboardInput {
+//                     //             state: ElementState::Pressed,
+//                     //             virtual_keycode: Some(VirtualKeyCode::Escape),
+//                     //             ..
+//                     //         },
+//                     //     ..
+//                     // } => *control_flow = ControlFlow::Exit,
+
+//                     // WindowEvent::CloseRequested => event_loop.exit(),
+//                     // WindowEvent::KeyboardInput {
+//                     //     event: KeyEvent {
+//                     //         physical_key: PhysicalKey::Code(code),
+//                     //         state,
+//                     //         ..
+//                     //     },
+//                     //     ..
+//                     // } => match (code, state.is_pressed()) {
+//                     //     (KeyCode::Escape, true) => event_loop.exit(),
+//                     //     _ => {}
+//                     // }
+
+//                     WindowEvent::Resized(physical_size) => {
+//                         state.resize(*physical_size);
+//                     }
+
+//                     WindowEvent::ScaleFactorChanged {
+//                         // new_inner_size, ..
+//                         ..
+//                     } => {
+//                         // state.resize(**new_inner_size);
+//                     }
+
+//                     // WindowEvent::RedrawRequested => {
+//                     //     // window.request_redraw();
+//                     //     state.update();
+//                     //     match state.render() {
+//                     //         Ok(_) => {}
+//                     //         Err(wgpu::SurfaceError::Lost) => {
+//                     //             state.resize(state.size)
+//                     //         }
+//                     //         Err(wgpu::SurfaceError::OutOfMemory) => {
+//                     //             event_loop.exit()
+//                     //         }
+//                     //         Err(e) => eprintln!("{:?}", e)
+//                     //     }
+//                     //     stats.count_frame();
+//                     // }
+
+//                     _ => {}
+//                 }
+//             }
+//         }
+
+//         // Event::MainEventsCleared => {
+//         //     window.request_redraw();
+//         // }
+
+//         _ => {}
+//     });
+// }
+
+fn main() {
+    env_logger::init();
+    let event_loop: EventLoop<State> = EventLoop::with_user_event().build().unwrap();
+    let mut app = App::new();
+    event_loop.run_app(&mut app).unwrap();
 }

@@ -248,6 +248,7 @@ impl Lights {
             format: SHADOW_MAP_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
         });
 
         let shadow_view =
@@ -271,11 +272,12 @@ impl Lights {
                     label: Some(&format!("light_shadow_view_{}", i)),
                     format: None,
                     dimension: Some(wgpu::TextureViewDimension::D2),
+                    usage: None,
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: 0,
                     mip_level_count: None,
                     base_array_layer: i as u32,
-                    array_layer_count: std::num::NonZeroU32::new(1),
+                    array_layer_count: Some(1),
                 })
             })
             .collect::<Vec<_>>();

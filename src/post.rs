@@ -196,6 +196,7 @@ fn create_framebuffer(
         format: config.format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING
             | wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
     });
 
     texture.create_view(&wgpu::TextureViewDescriptor {
@@ -238,7 +239,8 @@ fn create_pipeline(
         layout: Some(&layout),
         vertex: wgpu::VertexState {
             module: &shader_module,
-            entry_point: "vs_main",
+            entry_point: Some("vs_main"),
+            compilation_options: Default::default(),
             buffers: &[PostVertexRaw::desc()],
         },
         primitive: wgpu::PrimitiveState {
@@ -258,14 +260,18 @@ fn create_pipeline(
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader_module,
-            entry_point: fragment_entry,
-            targets: &[wgpu::ColorTargetState {
-                format: color_format,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            }],
+            entry_point: Some(fragment_entry),
+            compilation_options: Default::default(),
+            targets: &[
+                Some(wgpu::ColorTargetState {
+                    format: color_format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                }),
+            ],
         }),
         multiview: None,
+        cache: None,
     })
 }
 
@@ -343,7 +349,7 @@ impl Post {
 
         // Shader
         let shader = wgpu::include_wgsl!("post_shaders.wgsl");
-        let shader_module = device.create_shader_module(&shader);
+        let shader_module = device.create_shader_module(shader);
 
         // Pipelines
 
@@ -553,15 +559,19 @@ impl Post {
         let mut render_pass =
             encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(&pass.render_pass_label),
-                color_attachments: &[wgpu::RenderPassColorAttachment {
-                    view: image_out,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: load_op,
-                        store: true,
-                    },
-                }],
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: image_out,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: load_op,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                ],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
         let mut owf = 1.0 / (1 << (pass_number + 2) / 2) as f32;
         let mut ohf = 1.0 / (1 << (pass_number + 1) / 2) as f32;
@@ -618,7 +628,7 @@ impl Post {
         }
         render_pass.set_pipeline(pipeline);
         for (i, bg) in other_bind_groups.iter().enumerate() {
-            render_pass.set_bind_group(i as u32, bg, &[]);
+            render_pass.set_bind_group(i as u32, Some(*bg), &[]);
         }
         render_pass.set_bind_group(
             pass.bind_group_index,

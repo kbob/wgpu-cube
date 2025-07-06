@@ -98,6 +98,7 @@ impl Glow {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
         });
 
         let glow_view =
@@ -155,11 +156,9 @@ impl Renderable<GlowAttributes, GlowPreparedData> for Glow {
         queue.write_texture(
             self.glow_texture.as_image_copy(),
             &self.resampler.data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: std::num::NonZeroU32::new(
-                    (DST_WIDTH * CHANNEL_COUNT) as _,
-                ),
+                bytes_per_row: Some((DST_WIDTH * CHANNEL_COUNT) as _),
                 rows_per_image: None,
             },
             wgpu::Extent3d {
