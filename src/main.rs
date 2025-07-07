@@ -1,4 +1,5 @@
 use std::{sync::Arc};
+use wgpu;
 use winit::{
     application::ApplicationHandler,
     event::*,
@@ -254,27 +255,35 @@ impl State {
         // Device and Surface
 
         let size = window.inner_size();
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
+
+        let instance = wgpu::Instance::new(
+            &wgpu::InstanceDescriptor::from_env_or_default()
+        );
+
         let surface = instance.create_surface(window.clone()).unwrap();
 
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
-                compatible_surface: Some(&surface),
+        let adapter = {
+            let ppref = wgpu::PowerPreference::from_env()
+                .unwrap_or(wgpu::PowerPreference::default());
+            let options = wgpu::RequestAdapterOptions {
+                power_preference: ppref,
                 force_fallback_adapter: false,
-            })
-            .await
-            .unwrap();
+                compatible_surface: Some(&surface),
+            };
+            // dbg!(&options);
+            let future = instance.request_adapter(&options);
+            let adapter = future.await.unwrap();
+            // dbg!(&adapter);
+            // dbg!(adapter.get_info());
+            // dbg!(adapter.limits());
+            adapter
+        };
 
-        let (device, queue) = adapter
-            .request_device(
+        let (device, queue) = adapter.request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("device"),
                     required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::default(),
+                    required_limits: adapter.limits(),
                     memory_hints: Default::default(),
                     trace: wgpu::Trace::Off,
                 })
